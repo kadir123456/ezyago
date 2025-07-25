@@ -217,14 +217,14 @@ class EzyagoApp {
             }
             
             this.showNotification(errorMessage, 'error');
-        }
-    }
-        } finally {
+        } finally { // HATA BURADAYDI - FAZLADAN BİR '}' SİLİNDİ
             // Re-enable submit button
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Giriş Yap';
             }
+        }
+    }
 
     async handleRegister() {
         const fullName = document.getElementById('register-name').value;
