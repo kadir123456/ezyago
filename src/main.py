@@ -106,8 +106,11 @@ async def subscription_checker():
 async def register_user(user_data: UserRegister):
     """Register a new user"""
     try:
+        print(f"🔄 Registration request received for: {user_data.email}")
+        
         # Validate input
         if not user_data.email or not user_data.password or not user_data.full_name:
+            print(f"❌ Missing required fields for: {user_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email, password, and full name are required"
@@ -115,20 +118,31 @@ async def register_user(user_data: UserRegister):
         
         # Validate password strength
         if len(user_data.password) < 6:
+            print(f"❌ Password too short for: {user_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Password must be at least 6 characters long"
             )
         
+        # Validate email format
+        if "@" not in user_data.email or "." not in user_data.email:
+            print(f"❌ Invalid email format: {user_data.email}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please enter a valid email address"
+            )
+        
         # Check if user already exists
         existing_user = await firebase_manager.get_user_by_email(user_data.email)
         if existing_user:
+            print(f"❌ User already exists: {user_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User with this email already exists"
             )
         
         # Register new user
+        print(f"🔄 Calling auth_manager.register_user for: {user_data.email}")
         new_user = await auth_manager.register_user(
             email=user_data.email,
             password=user_data.password,
@@ -137,12 +151,14 @@ async def register_user(user_data: UserRegister):
         )
         
         if not new_user:
+            print(f"❌ Registration failed for: {user_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to create user account. Please check your email and password."
             )
         
         # Create access token
+        print(f"🔄 Creating access token for: {user_data.email}")
         access_token = auth_manager.create_access_token(
             data={"sub": new_user.uid, "email": new_user.email}
         )
@@ -166,6 +182,8 @@ async def register_user(user_data: UserRegister):
         raise
     except Exception as e:
         print(f"❌ Registration error: {e}")
+        import traceback
+        print(f"❌ Full traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error during registration"
