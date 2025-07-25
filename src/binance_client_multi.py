@@ -51,7 +51,7 @@ class MultiBinanceClient:
             print(f"❌ Error getting positions: {e}")
             return []
     
-    async def create_market_order_with_sl(self, symbol: str, side: str, quantity: float, entry_price: float, price_precision: int):
+    async def create_market_order_with_sl(self, symbol: str, side: str, quantity: float, entry_price: float, price_precision: int, stop_loss_percent: float = 4.0):
         """Create market order with stop loss"""
         def format_price(price):
             return f"{price:.{price_precision}f}"
@@ -72,9 +72,9 @@ class MultiBinanceClient:
             
             # Calculate stop loss price
             sl_price = (
-                entry_price * (1 - settings.STOP_LOSS_PERCENT) 
+                entry_price * (1 - stop_loss_percent / 100) 
                 if side == 'BUY' 
-                else entry_price * (1 + settings.STOP_LOSS_PERCENT)
+                else entry_price * (1 + stop_loss_percent / 100)
             )
             
             formatted_sl_price = format_price(sl_price)

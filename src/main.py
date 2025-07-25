@@ -106,6 +106,20 @@ async def subscription_checker():
 async def register_user(user_data: UserRegister):
     """Register a new user"""
     try:
+        # Validate input
+        if not user_data.email or not user_data.password or not user_data.full_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email, password, and full name are required"
+            )
+        
+        # Validate password strength
+        if len(user_data.password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 6 characters long"
+            )
+        
         # Check if user already exists
         existing_user = await firebase_manager.get_user_by_email(user_data.email)
         if existing_user:
@@ -124,14 +138,16 @@ async def register_user(user_data: UserRegister):
         
         if not new_user:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create user account"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to create user account. Please check your email and password."
             )
         
         # Create access token
         access_token = auth_manager.create_access_token(
             data={"sub": new_user.uid, "email": new_user.email}
         )
+        
+        print(f"✅ User registration completed successfully: {user_data.email}")
         
         return {
             "message": "User registered successfully",
@@ -159,6 +175,13 @@ async def register_user(user_data: UserRegister):
 async def login_user(login_data: UserLogin):
     """Authenticate user and return access token"""
     try:
+        # Validate input
+        if not login_data.email or not login_data.password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email and password are required"
+            )
+        
         # Authenticate user
         user = await auth_manager.authenticate_user(login_data.email, login_data.password)
         if not user:
@@ -178,6 +201,8 @@ async def login_user(login_data: UserLogin):
         access_token = auth_manager.create_access_token(
             data={"sub": user.uid, "email": user.email}
         )
+        
+        print(f"✅ User login completed successfully: {login_data.email}")
         
         return {
             "message": "Login successful",
@@ -432,6 +457,76 @@ async def delete_api_keys(current_user: UserData = Depends(get_current_user)):
 
 # ==================== BOT CONTROL ENDPOINTS ====================
 
+@app.get("/api/bot/settings", response_model=BotSettings)
+async def get_bot_settings(current_user: UserData = Depends(get_current_user)):
+    """Get user's bot settings"""
+    return BotSettings(
+        order_size_usdt=current_user.bot_order_size_usdt,
+        leverage=current_user.bot_leverage,
+        stop_loss_percent=current_user.bot_stop_loss_percent,
+        take_profit_percent=current_user.bot_take_profit_percent,
+        timeframe=current_user.bot_timeframe
+    )
+
+@app.post("/api/bot/settings", response_model=dict)
+async def update_bot_settings(
+    settings: BotSettings,
+    current_user: UserData = Depends(get_current_user)
+):
+    """Update user's bot settings"""
+    try:
+        # Validate settings
+        if settings.order_size_usdt < 10 or settings.order_size_usdt > 1000:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Order size must be between 10-1000 USDT"
+            )
+        
+        if settings.leverage < 1 or settings.leverage > 20:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Leverage must be between 1-20x"
+            )
+        
+        if settings.stop_loss_percent < 1 or settings.stop_loss_percent > 10:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Stop loss must be between 1-10%"
+            )
+        
+        if settings.take_profit_percent < 2 or settings.take_profit_percent > 20:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Take profit must be between 2-20%"
+            )
+        
+        # Update user settings
+        updates = {
+            "bot_order_size_usdt": settings.order_size_usdt,
+            "bot_leverage": settings.leverage,
+            "bot_stop_loss_percent": settings.stop_loss_percent,
+            "bot_take_profit_percent": settings.take_profit_percent,
+            "bot_timeframe": settings.timeframe
+        }
+        
+        success = await firebase_manager.update_user(current_user.uid, updates)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update bot settings"
+            )
+        
+        return {"message": "Bot settings updated successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Bot settings update error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
 @app.post("/api/bot/start", response_model=dict)
 async def start_bot(
     request: BotControl,
@@ -522,6 +617,11 @@ async def get_bot_status(current_user: UserData = Depends(get_current_user)):
     try:
         # Get bot status from bot manager
         bot_status = await bot_manager.get_user_bot_status(current_user.uid)
+        
+        # Get updated user stats
+        updated_user = await firebase_manager.get_user(current_user.uid)
+        if updated_user:
+            current_user = updated_user
         
         return BotStatusResponse(
             status=BotStatus(bot_status.get('status', 'stopped')),
@@ -741,6 +841,107 @@ async def unblock_user(
             detail="Internal server error"
         )
 
+@app.get("/api/admin/ip-whitelist", response_model=List[dict])
+async def admin_get_ip_whitelist(admin_user: UserData = Depends(get_current_admin)):
+    """Get all IP whitelist entries for admin"""
+    try:
+        entries = await firebase_manager.get_ip_whitelist()
+        return entries
+        
+    except Exception as e:
+        print(f"❌ Admin IP whitelist error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+@app.post("/api/admin/ip-whitelist", response_model=dict)
+async def admin_create_ip_whitelist(
+    entry_data: IPWhitelistCreate,
+    admin_user: UserData = Depends(get_current_admin)
+):
+    """Create new IP whitelist entry"""
+    try:
+        from .models import IPWhitelistEntry
+        
+        entry = IPWhitelistEntry(
+            ip_address=entry_data.ip_address,
+            description=entry_data.description,
+            created_at=datetime.utcnow(),
+            created_by=admin_user.uid
+        )
+        
+        success = await firebase_manager.create_ip_whitelist_entry(entry)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create IP whitelist entry"
+            )
+        
+        return {"message": "IP whitelist entry created successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Admin create IP whitelist error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+@app.put("/api/admin/ip-whitelist/{ip_address}", response_model=dict)
+async def admin_update_ip_whitelist(
+    ip_address: str,
+    updates: IPWhitelistUpdate,
+    admin_user: UserData = Depends(get_current_admin)
+):
+    """Update IP whitelist entry"""
+    try:
+        update_data = {k: v for k, v in updates.dict().items() if v is not None}
+        
+        success = await firebase_manager.update_ip_whitelist_entry(ip_address, update_data)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="IP whitelist entry not found"
+            )
+        
+        return {"message": "IP whitelist entry updated successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Admin update IP whitelist error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+@app.delete("/api/admin/ip-whitelist/{ip_address}", response_model=dict)
+async def admin_delete_ip_whitelist(
+    ip_address: str,
+    admin_user: UserData = Depends(get_current_admin)
+):
+    """Delete IP whitelist entry"""
+    try:
+        success = await firebase_manager.delete_ip_whitelist_entry(ip_address)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="IP whitelist entry not found"
+            )
+        
+        return {"message": "IP whitelist entry deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Admin delete IP whitelist error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
 # ==================== STATIC FILES AND FRONTEND ====================
 
 # Serve static files
@@ -752,10 +953,50 @@ async def serve_frontend():
     """Serve the main frontend application"""
     return FileResponse("static/index.html")
 
+@app.get("/api-guide")
+async def serve_api_guide():
+    """Serve the API guide page"""
+    return FileResponse("static/api-guide.html")
+
+@app.get("/about")
+async def serve_about():
+    """Serve the about page"""
+    return FileResponse("static/about.html")
+
+@app.get("/privacy")
+async def serve_privacy():
+    """Serve the privacy policy page"""
+    return FileResponse("static/privacy.html")
+
+@app.get("/terms")
+async def serve_terms():
+    """Serve the terms of service page"""
+    return FileResponse("static/terms.html")
+
+@app.get("/risk")
+async def serve_risk():
+    """Serve the risk disclosure page"""
+    return FileResponse("static/risk.html")
+
 @app.get("/admin")
 async def serve_admin():
     """Serve the admin panel"""
     return FileResponse("static/admin.html")
+
+@app.get("/contact")
+async def serve_contact():
+    """Serve the contact page"""
+    return FileResponse("static/contact.html")
+
+@app.get("/sitemap.xml")
+async def serve_sitemap():
+    """Serve sitemap.xml"""
+    return FileResponse("static/sitemap.xml", media_type="application/xml")
+
+@app.get("/robots.txt")
+async def serve_robots():
+    """Serve robots.txt"""
+    return FileResponse("static/robots.txt", media_type="text/plain")
 
 # Catch-all route for SPA routing
 @app.get("/{path:path}")

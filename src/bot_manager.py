@@ -42,13 +42,23 @@ class BotManager:
                 print(f"❌ Failed to decrypt API credentials for user {user.email}")
                 return False
             
+            # Prepare user settings
+            user_settings = {
+                'bot_order_size_usdt': user.bot_order_size_usdt,
+                'bot_leverage': user.bot_leverage,
+                'bot_stop_loss_percent': user.bot_stop_loss_percent,
+                'bot_take_profit_percent': user.bot_take_profit_percent,
+                'bot_timeframe': user.bot_timeframe
+            }
+            
             # Create new bot instance
             bot_instance = UserBotInstance(
                 user_id=user.uid,
                 user_email=user.email,
                 api_key=api_key,
                 api_secret=api_secret,
-                is_testnet=user.is_testnet
+                is_testnet=user.is_testnet,
+                user_settings=user_settings
             )
             
             # Start the bot

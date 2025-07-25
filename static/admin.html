@@ -362,6 +362,34 @@
         </div>
     </div>
 
+    <!-- Add IP Modal -->
+    <div id="add-ip-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>IP Adresi Ekle</h3>
+                <button class="modal-close" onclick="closeAddIPModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="add-ip-form">
+                    <div class="form-group">
+                        <label for="ip-address">IP Adresi:</label>
+                        <input type="text" id="ip-address" class="form-input" placeholder="192.168.1.1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="ip-description">Açıklama:</label>
+                        <input type="text" id="ip-description" class="form-input" placeholder="Render.com sunucu IP'si" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">
+                        <i class="fas fa-plus"></i>
+                        IP Ekle
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Notification -->
     <div id="notification" class="notification">
         <div class="notification-content">

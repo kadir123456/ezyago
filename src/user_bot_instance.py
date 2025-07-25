@@ -8,18 +8,25 @@ from .binance_client_multi import MultiBinanceClient
 from .trading_strategy import trading_strategy
 from .database import firebase_manager
 from .models import TradeData
-from .config import settings
 
 class UserBotInstance:
     """
     Individual bot instance for a single user
     """
-    def __init__(self, user_id: str, user_email: str, api_key: str, api_secret: str, is_testnet: bool = False):
+    def __init__(self, user_id: str, user_email: str, api_key: str, api_secret: str, is_testnet: bool = False, user_settings: dict = None):
         self.user_id = user_id
         self.user_email = user_email
         self.api_key = api_key
         self.api_secret = api_secret
         self.is_testnet = is_testnet
+        
+        # User bot settings
+        self.user_settings = user_settings or {}
+        self.order_size_usdt = self.user_settings.get('bot_order_size_usdt', 25.0)
+        self.leverage = self.user_settings.get('bot_leverage', 10)
+        self.stop_loss_percent = self.user_settings.get('bot_stop_loss_percent', 4.0)
+        self.take_profit_percent = self.user_settings.get('bot_take_profit_percent', 8.0)
+        self.timeframe = self.user_settings.get('bot_timeframe', '15m')
         
         # Bot state
         self.current_symbol: Optional[str] = None
@@ -28,6 +35,12 @@ class UserBotInstance:
         self.started_at: Optional[datetime] = None
         self.is_active = False
         self.stop_requested = False
+        
+        # Current trade tracking
+        self.current_trade_id: Optional[str] = None
+        self.entry_price: Optional[float] = None
+        self.entry_time: Optional[datetime] = None
+        self.position_quantity: Optional[float] = None
         
         # Trading data
         self.klines = []
@@ -74,14 +87,14 @@ class UserBotInstance:
             self.price_precision = self._get_precision_from_filter(symbol_info, 'PRICE_FILTER', 'tickSize')
             
             # Set leverage
-            if not await self.binance_client.set_leverage(self.current_symbol, settings.LEVERAGE):
+            if not await self.binance_client.set_leverage(self.current_symbol, self.leverage):
                 print(f"❌ Failed to set leverage for user {self.user_email}")
                 return False
             
             # Get historical data
             self.klines = await self.binance_client.get_historical_klines(
                 self.current_symbol, 
-                settings.TIMEFRAME, 
+                self.timeframe, 
                 limit=50
             )
             
@@ -134,7 +147,8 @@ class UserBotInstance:
     
     async def _websocket_handler(self):
         """Handle WebSocket connection for real-time data"""
-        ws_url = f"{settings.BINANCE_WS_URL_LIVE if not self.is_testnet else settings.BINANCE_WS_URL_TEST}/ws/{self.current_symbol.lower()}@kline_{settings.TIMEFRAME}"
+        from .config import settings
+        ws_url = f"{settings.BINANCE_WS_URL_LIVE if not self.is_testnet else settings.BINANCE_WS_URL_TEST}/ws/{self.current_symbol.lower()}@kline_{self.timeframe}"
         
         while not self.stop_requested:
             try:
@@ -185,11 +199,19 @@ class UserBotInstance:
             # Check current position
             open_positions = await self.binance_client.get_open_positions(self.current_symbol)
             
-            # Check if position was closed by stop loss
+            # Check if position was closed by stop loss or take profit
             if self.position_side is not None and not open_positions:
-                print(f"🛑 Position closed by SL for user {self.user_email}")
-                await self._log_trade_closure("CLOSED_BY_SL")
+                print(f"🛑 Position closed automatically for user {self.user_email}")
+                await self._log_trade_closure("CLOSED_BY_SL_OR_TP")
                 self.position_side = None
+                self.current_trade_id = None
+                self.entry_price = None
+                self.entry_time = None
+                self.position_quantity = None
+            
+            # Check for take profit if position is open
+            elif self.position_side is not None and open_positions:
+                await self._check_take_profit(open_positions[0])
             
             # Get new signal
             signal = trading_strategy.analyze_klines(self.klines)
@@ -229,19 +251,22 @@ class UserBotInstance:
                 print(f"❌ Failed to get market price for user {self.user_email}")
                 return
             
-            quantity = self._format_quantity((settings.ORDER_SIZE_USDT * settings.LEVERAGE) / price)
+            quantity = self._format_quantity((self.order_size_usdt * self.leverage) / price)
             
             if quantity <= 0:
                 print(f"❌ Invalid quantity calculated for user {self.user_email}")
                 return
             
-            # Create market order with stop loss
+            # Create market order with stop loss (take profit will be monitored separately)
             order = await self.binance_client.create_market_order_with_sl(
-                self.current_symbol, side, quantity, price, self.price_precision
+                self.current_symbol, side, quantity, price, self.price_precision, self.stop_loss_percent
             )
             
             if order:
                 self.position_side = new_signal
+                self.entry_price = price
+                self.entry_time = datetime.utcnow()
+                self.position_quantity = quantity
                 print(f"✅ New {new_signal} position opened for user {self.user_email} at {price}")
                 
                 # Log trade opening
@@ -253,11 +278,54 @@ class UserBotInstance:
         except Exception as e:
             print(f"❌ Error executing trade for user {self.user_email}: {e}")
     
+    async def _check_take_profit(self, position):
+        """Check if take profit target is reached"""
+        try:
+            if not self.entry_price or not self.position_side:
+                return
+            
+            current_price = await self.binance_client.get_market_price(self.current_symbol)
+            if not current_price:
+                return
+            
+            # Calculate profit percentage
+            if self.position_side == "LONG":
+                profit_percent = ((current_price - self.entry_price) / self.entry_price) * 100
+            else:  # SHORT
+                profit_percent = ((self.entry_price - current_price) / self.entry_price) * 100
+            
+            print(f"📊 Current profit for {self.user_email}: {profit_percent:.2f}% (Target: {self.take_profit_percent}%)")
+            
+            # Check if take profit target is reached
+            if profit_percent >= self.take_profit_percent:
+                print(f"🎯 Take profit target reached for user {self.user_email}! Closing position...")
+                
+                # Close position
+                position_amt = float(position['positionAmt'])
+                side_to_close = 'SELL' if position_amt > 0 else 'BUY'
+                
+                await self.binance_client.close_position(self.current_symbol, position_amt, side_to_close)
+                
+                # Log trade closure
+                await self._log_trade_closure("CLOSED_BY_TAKE_PROFIT")
+                
+                # Reset position tracking
+                self.position_side = None
+                self.current_trade_id = None
+                self.entry_price = None
+                self.entry_time = None
+                self.position_quantity = None
+                
+        except Exception as e:
+            print(f"❌ Error checking take profit for user {self.user_email}: {e}")
+    
     async def _log_trade_opening(self, side: str, entry_price: float, quantity: float):
         """Log trade opening"""
         try:
+            self.current_trade_id = f"{self.user_id}_{int(datetime.utcnow().timestamp())}"
+            
             trade_data = TradeData(
-                trade_id=f"{self.user_id}_{int(datetime.utcnow().timestamp())}",
+                trade_id=self.current_trade_id,
                 user_id=self.user_id,
                 symbol=self.current_symbol,
                 side=side,
@@ -270,6 +338,7 @@ class UserBotInstance:
             )
             
             await firebase_manager.log_trade(trade_data)
+            print(f"📝 Trade opening logged for user {self.user_email}: {self.current_trade_id}")
             
         except Exception as e:
             print(f"❌ Error logging trade opening for user {self.user_email}: {e}")
@@ -278,23 +347,26 @@ class UserBotInstance:
         """Log trade closure"""
         try:
             pnl = await self.binance_client.get_last_trade_pnl(self.current_symbol)
+            current_price = await self.binance_client.get_market_price(self.current_symbol)
             
-            # Create a simple trade log for closure
+            # Create trade closure log
             trade_data = TradeData(
-                trade_id=f"{self.user_id}_{int(datetime.utcnow().timestamp())}",
+                trade_id=self.current_trade_id or f"{self.user_id}_{int(datetime.utcnow().timestamp())}",
                 user_id=self.user_id,
                 symbol=self.current_symbol,
                 side=self.position_side or "UNKNOWN",
-                entry_price=0.0,  # We don't track this in current implementation
-                quantity=0.0,     # We don't track this in current implementation
+                entry_price=self.entry_price or 0.0,
+                exit_price=current_price,
+                quantity=self.position_quantity or 0.0,
                 pnl=pnl,
                 status="CLOSED",
-                entry_time=datetime.utcnow(),
+                entry_time=self.entry_time or datetime.utcnow(),
                 exit_time=datetime.utcnow(),
                 close_reason=close_reason
             )
             
             await firebase_manager.log_trade(trade_data)
+            print(f"📝 Trade closure logged for user {self.user_email}: PnL ${pnl:.2f}")
             
         except Exception as e:
             print(f"❌ Error logging trade closure for user {self.user_email}: {e}")

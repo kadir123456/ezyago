@@ -9,6 +9,8 @@ import uuid
 from .config import settings
 from .database import firebase_manager
 from .models import UserData, UserRole
+import firebase_admin
+from firebase_admin import auth as firebase_auth
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -54,47 +56,102 @@ class AuthManager:
     
     async def authenticate_user(self, email: str, password: str) -> Optional[UserData]:
         """Authenticate a user with email and password"""
-        user = await firebase_manager.get_user_by_email(email)
-        if not user:
+        try:
+            # First check if user exists in Firebase Authentication
+            try:
+                firebase_user = firebase_auth.get_user_by_email(email)
+                print(f"✅ Firebase Auth user found: {email}")
+            except firebase_auth.UserNotFoundError:
+                print(f"❌ User not found in Firebase Auth: {email}")
+                return None
+            except Exception as e:
+                print(f"❌ Firebase Auth lookup error: {e}")
+                return None
+            
+            # Get user from Realtime Database
+            user = await firebase_manager.get_user_by_email(email)
+            if not user:
+                print(f"❌ User not found in database: {email}")
+                return None
+            
+            # Verify password
+            if not self.verify_password(password, user.password_hash):
+                print(f"❌ Invalid password for user: {email}")
+                return None
+            
+            # Update last login
+            await firebase_manager.update_user(user.uid, {
+                'last_login': datetime.utcnow()
+            })
+            
+            print(f"✅ User authenticated successfully: {email}")
+            return user
+            
+        except Exception as e:
+            print(f"❌ Authentication error for {email}: {e}")
             return None
-        
-        if not self.verify_password(password, user.password_hash):
-            return None
-        
-        # Update last login
-        await firebase_manager.update_user(user.uid, {
-            'last_login': datetime.utcnow()
-        })
-        
-        return user
     
     async def register_user(self, email: str, password: str, full_name: str, language: str = "tr") -> Optional[UserData]:
         """Register a new user"""
-        # Check if user already exists
-        existing_user = await firebase_manager.get_user_by_email(email)
-        if existing_user:
+        try:
+            # Check if user already exists in Realtime Database
+            existing_user = await firebase_manager.get_user_by_email(email)
+            if existing_user:
+                print(f"❌ User already exists in database: {email}")
+                return None
+            
+            # First, create user in Firebase Authentication
+            try:
+                firebase_user = firebase_auth.create_user(
+                    email=email,
+                    password=password,
+                    display_name=full_name,
+                    email_verified=False
+                )
+                print(f"✅ Firebase Auth user created: {firebase_user.uid}")
+                
+            except firebase_auth.EmailAlreadyExistsError:
+                print(f"❌ Email already exists in Firebase Auth: {email}")
+                return None
+            except firebase_auth.WeakPasswordError as e:
+                print(f"❌ Weak password error: {e}")
+                return None
+            except Exception as e:
+                print(f"❌ Firebase Auth creation error: {e}")
+                return None
+            
+            # If Firebase Auth creation successful, create user in Realtime Database
+            password_hash = self.get_password_hash(password)
+            verification_token = self.generate_verification_token()
+            
+            user_data = UserData(
+                uid=firebase_user.uid,  # Use Firebase Auth UID
+                email=email,
+                password_hash=password_hash,
+                full_name=full_name,
+                language=language,
+                email_verification_token=verification_token,
+                created_at=datetime.utcnow(),
+                trial_end_date=datetime.utcnow() + timedelta(days=settings.TRIAL_DAYS)
+            )
+            
+            # Create user in Realtime Database
+            success = await firebase_manager.create_user(user_data)
+            if success:
+                print(f"✅ User created successfully in database: {email}")
+                return user_data
+            else:
+                # If database creation fails, delete from Firebase Auth
+                try:
+                    firebase_auth.delete_user(firebase_user.uid)
+                    print(f"🧹 Cleaned up Firebase Auth user after database failure: {email}")
+                except Exception as cleanup_error:
+                    print(f"❌ Failed to cleanup Firebase Auth user: {cleanup_error}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Registration error for {email}: {e}")
             return None
-        
-        # Create new user
-        uid = str(uuid.uuid4())
-        password_hash = self.get_password_hash(password)
-        verification_token = self.generate_verification_token()
-        
-        user_data = UserData(
-            uid=uid,
-            email=email,
-            password_hash=password_hash,
-            full_name=full_name,
-            language=language,
-            email_verification_token=verification_token,
-            created_at=datetime.utcnow(),
-            trial_end_date=datetime.utcnow() + timedelta(days=settings.TRIAL_DAYS)
-        )
-        
-        success = await firebase_manager.create_user(user_data)
-        if success:
-            return user_data
-        return None
     
     async def verify_email(self, token: str) -> bool:
         """Verify user email with token"""

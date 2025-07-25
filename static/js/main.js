@@ -1,4 +1,5 @@
 // Ezyago Frontend JavaScript
+
 class EzyagoApp {
     constructor() {
         this.apiUrl = window.location.origin;
@@ -139,6 +140,11 @@ class EzyagoApp {
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
 
+        // Client-side validation
+        if (!email || !password) {
+            this.showNotification('E-posta ve şifre gereklidir.', 'error');
+            return;
+        }
         try {
             const response = await this.apiCall('/api/auth/login', 'POST', {
                 email,
@@ -155,7 +161,15 @@ class EzyagoApp {
                 this.showNotification('Başarıyla giriş yaptınız!', 'success');
             }
         } catch (error) {
-            this.showNotification(error.message || 'Giriş yapılırken hata oluştu', 'error');
+            let errorMessage = 'Giriş yapılırken hata oluştu';
+            
+            if (error.message.includes('Invalid email or password')) {
+                errorMessage = 'E-posta veya şifre hatalı.';
+            } else if (error.message.includes('blocked')) {
+                errorMessage = 'Hesabınız engellenmiş. Lütfen destek ile iletişime geçin.';
+            }
+            
+            this.showNotification(errorMessage, 'error');
         }
     }
 
@@ -164,6 +178,21 @@ class EzyagoApp {
         const email = document.getElementById('register-email').value;
         const password = document.getElementById('register-password').value;
 
+        // Client-side validation
+        if (!fullName || !email || !password) {
+            this.showNotification('Lütfen tüm alanları doldurun.', 'error');
+            return;
+        }
+
+        if (password.length < 6) {
+            this.showNotification('Şifre en az 6 karakter olmalıdır.', 'error');
+            return;
+        }
+
+        if (!email.includes('@')) {
+            this.showNotification('Geçerli bir e-posta adresi girin.', 'error');
+            return;
+        }
         try {
             const response = await this.apiCall('/api/auth/register', 'POST', {
                 full_name: fullName,
@@ -182,7 +211,17 @@ class EzyagoApp {
                 this.showNotification('Hesabınız başarıyla oluşturuldu! 7 günlük deneme süreniz başladı.', 'success');
             }
         } catch (error) {
-            this.showNotification(error.message || 'Kayıt olurken hata oluştu', 'error');
+            let errorMessage = 'Kayıt olurken hata oluştu';
+            
+            if (error.message.includes('already exists')) {
+                errorMessage = 'Bu e-posta adresi zaten kullanılıyor.';
+            } else if (error.message.includes('password')) {
+                errorMessage = 'Şifre çok zayıf. En az 6 karakter kullanın.';
+            } else if (error.message.includes('email')) {
+                errorMessage = 'Geçersiz e-posta adresi.';
+            }
+            
+            this.showNotification(errorMessage, 'error');
         }
     }
 
@@ -220,13 +259,20 @@ class EzyagoApp {
     // Dashboard Methods
     async loadDashboardData() {
         try {
-            const [botStatus, profile] = await Promise.all([
-                this.apiCall('/api/bot/status', 'GET'),
-                this.apiCall('/api/user/profile', 'GET')
-            ]);
+            // Get bot status (which now includes updated user stats)
+            const botStatus = await this.apiCall('/api/bot/status', 'GET');
 
             this.updateBotStatus(botStatus);
-            this.updateUserStats(profile);
+            
+            // Update user stats from bot status response
+            const userStats = {
+                total_trades: botStatus.total_trades,
+                winning_trades: botStatus.winning_trades,
+                losing_trades: botStatus.losing_trades,
+                total_pnl: botStatus.total_pnl
+            };
+            this.updateUserStats(userStats);
+            
         } catch (error) {
             console.error('Failed to load dashboard data:', error);
         }
@@ -270,7 +316,19 @@ class EzyagoApp {
         
         document.getElementById('total-trades').textContent = user.total_trades || 0;
         document.getElementById('win-rate').textContent = `${winRate}%`;
-        document.getElementById('total-pnl').textContent = `$${(user.total_pnl || 0).toFixed(2)}`;
+        
+        const totalPnl = user.total_pnl || 0;
+        const pnlElement = document.getElementById('total-pnl');
+        pnlElement.textContent = `$${totalPnl.toFixed(2)}`;
+        
+        // Color code the PnL
+        if (totalPnl > 0) {
+            pnlElement.style.color = 'var(--secondary-color)';
+        } else if (totalPnl < 0) {
+            pnlElement.style.color = 'var(--danger-color)';
+        } else {
+            pnlElement.style.color = 'var(--text-primary)';
+        }
         
         // Update detailed stats
         document.getElementById('stats-total').textContent = user.total_trades || 0;
@@ -306,6 +364,51 @@ class EzyagoApp {
     }
 
     // Bot Control Methods
+    async loadBotSettings() {
+        try {
+            const settings = await this.apiCall('/api/bot/settings', 'GET');
+            
+            document.getElementById('order-size').value = settings.order_size_usdt;
+            document.getElementById('leverage').value = settings.leverage;
+            document.getElementById('stop-loss').value = settings.stop_loss_percent;
+            document.getElementById('take-profit').value = settings.take_profit_percent;
+            document.getElementById('timeframe').value = settings.timeframe;
+            
+        } catch (error) {
+            console.error('Failed to load bot settings:', error);
+        }
+    }
+
+    async saveBotSettings() {
+        const orderSize = parseFloat(document.getElementById('order-size').value);
+        const leverage = parseInt(document.getElementById('leverage').value);
+        const stopLoss = parseFloat(document.getElementById('stop-loss').value);
+        const takeProfit = parseFloat(document.getElementById('take-profit').value);
+        const timeframe = document.getElementById('timeframe').value;
+
+        try {
+            await this.apiCall('/api/bot/settings', 'POST', {
+                order_size_usdt: orderSize,
+                leverage: leverage,
+                stop_loss_percent: stopLoss,
+                take_profit_percent: takeProfit,
+                timeframe: timeframe
+            });
+            
+            this.showNotification('Bot ayarları başarıyla kaydedildi!', 'success');
+        } catch (error) {
+            this.showNotification(error.message || 'Bot ayarları kaydedilirken hata oluştu', 'error');
+        }
+    }
+
+    resetBotSettings() {
+        document.getElementById('order-size').value = 25;
+        document.getElementById('leverage').value = 10;
+        document.getElementById('stop-loss').value = 4;
+        document.getElementById('take-profit').value = 8;
+        document.getElementById('timeframe').value = '15m';
+    }
+
     async startBot() {
         const symbol = document.getElementById('symbol-input').value.trim().toUpperCase();
         
@@ -467,10 +570,14 @@ class EzyagoApp {
         // Load page-specific data
         if (page === 'overview') {
             this.loadDashboardData();
+        } else if (page === 'bot') {
+            this.loadBotSettings();
         } else if (page === 'subscription') {
             this.loadPaymentInfo();
         } else if (page === 'settings') {
             this.loadSettingsData();
+        } else if (page === 'api-keys') {
+            this.loadIPWhitelist();
         }
     }
 
@@ -586,6 +693,21 @@ class EzyagoApp {
     scrollToFeatures() {
         document.getElementById('features').scrollIntoView({ behavior: 'smooth' });
     }
+
+    copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            this.showNotification(`${text} kopyalandı!`, 'success');
+        }).catch(() => {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            this.showNotification(`${text} kopyalandı!`, 'success');
+        });
+    }
 }
 
 // Global functions for HTML onclick handlers
@@ -644,6 +766,18 @@ function deleteAccount() {
 
 function scrollToFeatures() {
     app.scrollToFeatures();
+}
+
+function saveBotSettings() {
+    app.saveBotSettings();
+}
+
+function resetBotSettings() {
+    app.resetBotSettings();
+}
+
+function copyToClipboard(text) {
+    app.copyToClipboard(text);
 }
 
 // Initialize app when DOM is loaded

@@ -1156,29 +1156,76 @@ body {
     margin-bottom: var(--spacing-md);
 }
 
-.settings-grid {
+.settings-form {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--spacing-md);
 }
 
-.setting-item {
+.settings-row {
     display: flex;
-    justify-content: space-between;
+    gap: var(--spacing-md);
+}
+
+.settings-row .form-group {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.settings-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--border-light);
+}
+
+/* IP Whitelist Section */
+.ip-whitelist-section {
+    margin-top: var(--spacing-xl);
+    padding: var(--spacing-lg);
+    background: #f0f9ff;
+    border: 1px solid #0ea5e9;
+    border-radius: var(--radius-lg);
+}
+
+.ip-whitelist-section h4 {
+    color: #0369a1;
+    margin-bottom: var(--spacing-md);
+}
+
+.ip-list {
+    display: grid;
+    gap: var(--spacing-sm);
+    margin: var(--spacing-md) 0;
+}
+
+.ip-item {
+    display: flex;
     align-items: center;
+    gap: var(--spacing-sm);
     padding: var(--spacing-sm);
     background: var(--bg-card);
     border-radius: var(--radius-md);
+    flex-direction: column;
+    align-items: stretch;
 }
 
-.setting-item .label {
-    font-weight: 500;
-    color: var(--text-secondary);
+.ip-item .ip-description {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    margin-top: var(--spacing-xs);
 }
 
-.setting-item .value {
+.ip-item code {
+    flex: 1;
+    font-family: 'Monaco', 'Menlo', monospace;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--primary-color);
+}
+
+.api-guide-link {
+    margin-top: var(--spacing-md);
+    text-align: center;
 }
 
 /* API Keys Form */
@@ -1621,6 +1668,20 @@ body {
     
     .control-buttons {
         flex-direction: column;
+    }
+    
+    .settings-row {
+        flex-direction: column;
+    }
+    
+    .settings-actions {
+        flex-direction: column;
+    }
+    
+    .ip-item {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
     }
     
     .form-actions {

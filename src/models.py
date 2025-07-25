@@ -45,6 +45,13 @@ class BotControl(BaseModel):
     action: str  # "start" or "stop"
     symbol: Optional[str] = None
 
+class BotSettings(BaseModel):
+    order_size_usdt: float = 25.0
+    leverage: int = 10
+    stop_loss_percent: float = 4.0
+    take_profit_percent: float = 8.0
+    timeframe: str = "15m"
+
 class PaymentNotification(BaseModel):
     transaction_hash: Optional[str] = None
     amount: float
@@ -98,6 +105,21 @@ class AdminStats(BaseModel):
     pending_payments: int
     active_bots: int
 
+class IPWhitelistEntry(BaseModel):
+    ip_address: str
+    description: str
+    is_active: bool = True
+    created_at: datetime
+    created_by: str  # admin uid
+
+class IPWhitelistCreate(BaseModel):
+    ip_address: str
+    description: str
+
+class IPWhitelistUpdate(BaseModel):
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
 # --- Database Models ---
 class UserData(BaseModel):
     uid: str
@@ -126,6 +148,13 @@ class UserData(BaseModel):
     bot_status: BotStatus = BotStatus.STOPPED
     current_symbol: Optional[str] = None
     bot_started_at: Optional[datetime] = None
+    
+    # Bot Settings
+    bot_order_size_usdt: float = 25.0
+    bot_leverage: int = 10
+    bot_stop_loss_percent: float = 4.0
+    bot_take_profit_percent: float = 8.0
+    bot_timeframe: str = "15m"
     
     # Statistics
     total_trades: int = 0

@@ -612,8 +612,26 @@ function saveSettings() {
     adminApp.saveSettings();
 }
 
+function showAddIPModal() {
+    adminApp.showAddIPModal();
+}
+
+function closeAddIPModal() {
+    adminApp.closeAddIPModal();
+}
+
+function refreshIPWhitelist() {
+    adminApp.loadIPWhitelist();
+}
+
 // Initialize admin app when DOM is loaded
 let adminApp;
 document.addEventListener('DOMContentLoaded', () => {
     adminApp = new EzyagoAdmin();
+    
+    // Add IP form handler
+    document.getElementById('add-ip-form')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        adminApp.addIP();
+    });
 });
