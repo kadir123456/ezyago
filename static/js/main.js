@@ -1,4 +1,5 @@
 // Ezyago Frontend JavaScript
+
 class EzyagoApp {
     constructor() {
         this.apiUrl = window.location.origin;
