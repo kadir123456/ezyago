@@ -57,6 +57,34 @@ class AuthManager:
     async def authenticate_user(self, email: str, password: str) -> Optional[UserData]:
         """Authenticate a user with email and password"""
         try:
+            # Special handling for admin user
+            if email == settings.ADMIN_EMAIL:
+                admin_password_hash = settings.get_admin_password_hash()
+                if self.verify_password(password, admin_password_hash):
+                    # Create or get admin user
+                    admin_user = await firebase_manager.get_user_by_email(email)
+                    if not admin_user:
+                        # Create admin user if doesn't exist
+                        from .models import UserRole, SubscriptionStatus
+                        admin_data = UserData(
+                            uid="admin-" + str(uuid.uuid4()),
+                            email=email,
+                            password_hash=admin_password_hash,
+                            full_name="Admin User",
+                            role=UserRole.ADMIN,
+                            subscription_status=SubscriptionStatus.ACTIVE,
+                            trial_end_date=datetime.utcnow() + timedelta(days=365),
+                            created_at=datetime.utcnow()
+                        )
+                        await firebase_manager.create_user(admin_data)
+                        admin_user = admin_data
+                    
+                    print(f"✅ Admin authenticated: {email}")
+                    return admin_user
+                else:
+                    print(f"❌ Invalid admin password: {email}")
+                    return None
+            
             # First check if user exists in Firebase Authentication
             try:
                 firebase_user = firebase_auth.get_user_by_email(email)
@@ -105,7 +133,14 @@ class AuthManager:
             # Validate password strength
             if len(password) < 6:
                 print(f"❌ Password too weak for {email}")
-                return None
+                raise ValueError("Password must be at least 6 characters long")
+            
+            # Validate email format
+            import re
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, email):
+                print(f"❌ Invalid email format: {email}")
+                raise ValueError("Invalid email format")
             
             # First, create user in Firebase Authentication
             try:
