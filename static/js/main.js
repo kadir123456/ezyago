@@ -1,0 +1,653 @@
+// Ezyago Frontend JavaScript
+class EzyagoApp {
+    constructor() {
+        this.apiUrl = window.location.origin;
+        this.token = localStorage.getItem('ezyago_token');
+        this.user = null;
+        this.currentPage = 'overview';
+        
+        this.init();
+    }
+
+    async init() {
+        // Hide loading screen after a short delay
+        setTimeout(() => {
+            document.getElementById('loading-screen').style.display = 'none';
+        }, 1000);
+
+        // Check if user is logged in
+        if (this.token) {
+            await this.loadUserProfile();
+            this.showDashboard();
+        } else {
+            this.showLandingPage();
+        }
+
+        this.setupEventListeners();
+        this.setupFAQ();
+        this.startDemoChart();
+    }
+
+    setupEventListeners() {
+        // Navigation
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const page = item.dataset.page;
+                this.navigateToPage(page);
+            });
+        });
+
+        // Forms
+        document.getElementById('login-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleLogin();
+        });
+
+        document.getElementById('register-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleRegister();
+        });
+
+        document.getElementById('forgot-password-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleForgotPassword();
+        });
+
+        // Modal close on backdrop click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeModal(modal.id);
+                }
+            });
+        });
+
+        // Auto-refresh dashboard data
+        if (this.token) {
+            setInterval(() => {
+                if (this.currentPage === 'overview') {
+                    this.loadDashboardData();
+                }
+            }, 10000); // Refresh every 10 seconds
+        }
+    }
+
+    setupFAQ() {
+        document.querySelectorAll('.faq-question').forEach(question => {
+            question.addEventListener('click', () => {
+                const faqItem = question.parentElement;
+                const isActive = faqItem.classList.contains('active');
+                
+                // Close all FAQ items
+                document.querySelectorAll('.faq-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                
+                // Open clicked item if it wasn't active
+                if (!isActive) {
+                    faqItem.classList.add('active');
+                }
+            });
+        });
+    }
+
+    startDemoChart() {
+        const canvas = document.getElementById('demo-chart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+
+        // Generate demo chart data
+        const points = [];
+        for (let i = 0; i < 50; i++) {
+            points.push({
+                x: (i / 49) * width,
+                y: height/2 + Math.sin(i * 0.3) * 30 + Math.random() * 20 - 10
+            });
+        }
+
+        // Draw chart
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        points.forEach((point, index) => {
+            if (index === 0) {
+                ctx.moveTo(point.x, point.y);
+            } else {
+                ctx.lineTo(point.x, point.y);
+            }
+        });
+        
+        ctx.stroke();
+
+        // Add gradient fill
+        ctx.globalAlpha = 0.1;
+        ctx.fillStyle = '#6366f1';
+        ctx.lineTo(width, height);
+        ctx.lineTo(0, height);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Authentication Methods
+    async handleLogin() {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+
+        try {
+            const response = await this.apiCall('/api/auth/login', 'POST', {
+                email,
+                password
+            });
+
+            if (response.access_token) {
+                this.token = response.access_token;
+                localStorage.setItem('ezyago_token', this.token);
+                this.user = response.user;
+                
+                this.closeModal('login-modal');
+                this.showDashboard();
+                this.showNotification('Başarıyla giriş yaptınız!', 'success');
+            }
+        } catch (error) {
+            this.showNotification(error.message || 'Giriş yapılırken hata oluştu', 'error');
+        }
+    }
+
+    async handleRegister() {
+        const fullName = document.getElementById('register-name').value;
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+
+        try {
+            const response = await this.apiCall('/api/auth/register', 'POST', {
+                full_name: fullName,
+                email,
+                password,
+                language: 'tr'
+            });
+
+            if (response.access_token) {
+                this.token = response.access_token;
+                localStorage.setItem('ezyago_token', this.token);
+                this.user = response.user;
+                
+                this.closeModal('register-modal');
+                this.showDashboard();
+                this.showNotification('Hesabınız başarıyla oluşturuldu! 7 günlük deneme süreniz başladı.', 'success');
+            }
+        } catch (error) {
+            this.showNotification(error.message || 'Kayıt olurken hata oluştu', 'error');
+        }
+    }
+
+    async handleForgotPassword() {
+        const email = document.getElementById('forgot-email').value;
+
+        try {
+            await this.apiCall('/api/auth/forgot-password', 'POST', { email });
+            this.closeModal('forgot-password-modal');
+            this.showNotification('Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.', 'success');
+        } catch (error) {
+            this.showNotification(error.message || 'Şifre sıfırlama isteği gönderilirken hata oluştu', 'error');
+        }
+    }
+
+    async loadUserProfile() {
+        try {
+            const response = await this.apiCall('/api/user/profile', 'GET');
+            this.user = response;
+            this.updateUserInfo();
+        } catch (error) {
+            console.error('Failed to load user profile:', error);
+            this.logout();
+        }
+    }
+
+    logout() {
+        this.token = null;
+        this.user = null;
+        localStorage.removeItem('ezyago_token');
+        this.showLandingPage();
+        this.showNotification('Başarıyla çıkış yaptınız.', 'info');
+    }
+
+    // Dashboard Methods
+    async loadDashboardData() {
+        try {
+            const [botStatus, profile] = await Promise.all([
+                this.apiCall('/api/bot/status', 'GET'),
+                this.apiCall('/api/user/profile', 'GET')
+            ]);
+
+            this.updateBotStatus(botStatus);
+            this.updateUserStats(profile);
+        } catch (error) {
+            console.error('Failed to load dashboard data:', error);
+        }
+    }
+
+    updateBotStatus(status) {
+        // Update status indicator
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = statusIndicator?.querySelector('.status-text');
+        
+        if (status.status === 'running') {
+            statusIndicator?.classList.add('running');
+            if (statusText) statusText.textContent = 'Çalışıyor';
+        } else {
+            statusIndicator?.classList.remove('running');
+            if (statusText) statusText.textContent = 'Durduruldu';
+        }
+
+        // Update bot info
+        document.getElementById('bot-status').textContent = status.status === 'running' ? 'Çalışıyor' : 'Durduruldu';
+        document.getElementById('current-symbol').textContent = status.symbol || '-';
+        document.getElementById('current-position').textContent = status.position_side || '-';
+        document.getElementById('last-signal').textContent = status.last_signal || '-';
+        document.getElementById('uptime').textContent = this.formatUptime(status.uptime || 0);
+
+        // Update control buttons
+        const startBtn = document.getElementById('start-bot-btn');
+        const stopBtn = document.getElementById('stop-bot-btn');
+        
+        if (status.status === 'running') {
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+        } else {
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        }
+    }
+
+    updateUserStats(user) {
+        const winRate = user.total_trades > 0 ? ((user.winning_trades / user.total_trades) * 100).toFixed(1) : 0;
+        
+        document.getElementById('total-trades').textContent = user.total_trades || 0;
+        document.getElementById('win-rate').textContent = `${winRate}%`;
+        document.getElementById('total-pnl').textContent = `$${(user.total_pnl || 0).toFixed(2)}`;
+        
+        // Update detailed stats
+        document.getElementById('stats-total').textContent = user.total_trades || 0;
+        document.getElementById('stats-winning').textContent = user.winning_trades || 0;
+        document.getElementById('stats-losing').textContent = user.losing_trades || 0;
+        
+        const totalProfit = Math.max(0, user.total_pnl || 0);
+        const totalLoss = Math.min(0, user.total_pnl || 0);
+        
+        document.getElementById('stats-profit').textContent = `$${totalProfit.toFixed(2)}`;
+        document.getElementById('stats-loss').textContent = `$${Math.abs(totalLoss).toFixed(2)}`;
+    }
+
+    updateUserInfo() {
+        if (!this.user) return;
+        
+        document.getElementById('user-name').textContent = this.user.full_name;
+        document.getElementById('user-email').textContent = this.user.email;
+        
+        // Update subscription info
+        document.getElementById('subscription-status').textContent = 
+            this.user.subscription_status === 'trial' ? 'Deneme Süresi' : 'Premium';
+        
+        const endDate = this.user.subscription_status === 'trial' 
+            ? this.user.trial_end_date 
+            : this.user.subscription_end_date;
+            
+        if (endDate) {
+            const remaining = this.calculateRemainingTime(endDate);
+            document.getElementById('remaining-time').textContent = remaining;
+            document.getElementById('end-date').textContent = new Date(endDate).toLocaleDateString('tr-TR');
+        }
+    }
+
+    // Bot Control Methods
+    async startBot() {
+        const symbol = document.getElementById('symbol-input').value.trim().toUpperCase();
+        
+        if (!symbol) {
+            this.showNotification('Lütfen bir trading sembolü girin.', 'error');
+            return;
+        }
+
+        try {
+            await this.apiCall('/api/bot/start', 'POST', { symbol });
+            this.showNotification(`Bot ${symbol} için başlatıldı!`, 'success');
+            this.loadDashboardData();
+        } catch (error) {
+            this.showNotification(error.message || 'Bot başlatılırken hata oluştu', 'error');
+        }
+    }
+
+    async stopBot() {
+        try {
+            await this.apiCall('/api/bot/stop', 'POST');
+            this.showNotification('Bot durduruldu.', 'info');
+            this.loadDashboardData();
+        } catch (error) {
+            this.showNotification(error.message || 'Bot durdurulurken hata oluştu', 'error');
+        }
+    }
+
+    // API Keys Methods
+    async saveApiKeys() {
+        const apiKey = document.getElementById('api-key').value.trim();
+        const apiSecret = document.getElementById('api-secret').value.trim();
+        const isTestnet = document.getElementById('is-testnet').checked;
+
+        if (!apiKey || !apiSecret) {
+            this.showNotification('Lütfen API Key ve Secret alanlarını doldurun.', 'error');
+            return;
+        }
+
+        try {
+            await this.apiCall('/api/user/api-keys', 'POST', {
+                api_key: apiKey,
+                api_secret: apiSecret,
+                is_testnet: isTestnet
+            });
+            
+            this.showNotification('API anahtarları başarıyla kaydedildi.', 'success');
+            
+            // Clear form
+            document.getElementById('api-key').value = '';
+            document.getElementById('api-secret').value = '';
+        } catch (error) {
+            this.showNotification(error.message || 'API anahtarları kaydedilirken hata oluştu', 'error');
+        }
+    }
+
+    async deleteApiKeys() {
+        if (!confirm('API anahtarlarınızı silmek istediğinizden emin misiniz?')) {
+            return;
+        }
+
+        try {
+            await this.apiCall('/api/user/api-keys', 'DELETE');
+            this.showNotification('API anahtarları silindi.', 'info');
+        } catch (error) {
+            this.showNotification(error.message || 'API anahtarları silinirken hata oluştu', 'error');
+        }
+    }
+
+    // Payment Methods
+    async loadPaymentInfo() {
+        try {
+            const response = await this.apiCall('/api/payment/wallet', 'GET');
+            document.getElementById('wallet-address').value = response.wallet_address;
+        } catch (error) {
+            console.error('Failed to load payment info:', error);
+        }
+    }
+
+    copyWalletAddress() {
+        const walletInput = document.getElementById('wallet-address');
+        walletInput.select();
+        document.execCommand('copy');
+        this.showNotification('Cüzdan adresi kopyalandı!', 'success');
+    }
+
+    async requestPayment() {
+        try {
+            await this.apiCall('/api/payment/request', 'POST', {
+                amount: 10,
+                message: 'Aylık abonelik ödemesi'
+            });
+            
+            this.showNotification('Ödeme bildirimi gönderildi. 24 saat içinde onaylanacaktır.', 'success');
+        } catch (error) {
+            this.showNotification(error.message || 'Ödeme bildirimi gönderilirken hata oluştu', 'error');
+        }
+    }
+
+    // Settings Methods
+    async updateProfile() {
+        const fullName = document.getElementById('full-name').value.trim();
+        const language = document.getElementById('language').value;
+
+        try {
+            await this.apiCall('/api/user/profile', 'PUT', {
+                full_name: fullName,
+                language: language
+            });
+            
+            this.showNotification('Profil başarıyla güncellendi.', 'success');
+            await this.loadUserProfile();
+        } catch (error) {
+            this.showNotification(error.message || 'Profil güncellenirken hata oluştu', 'error');
+        }
+    }
+
+    async deleteAccount() {
+        const confirmation = prompt('Hesabınızı silmek için "SİL" yazın:');
+        
+        if (confirmation !== 'SİL') {
+            return;
+        }
+
+        try {
+            await this.apiCall('/api/user/account', 'DELETE');
+            this.showNotification('Hesabınız başarıyla silindi.', 'info');
+            this.logout();
+        } catch (error) {
+            this.showNotification(error.message || 'Hesap silinirken hata oluştu', 'error');
+        }
+    }
+
+    // Navigation Methods
+    navigateToPage(page) {
+        // Update active nav item
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
+
+        // Show page
+        document.querySelectorAll('.page').forEach(p => {
+            p.classList.remove('active');
+        });
+        document.getElementById(`${page}-page`)?.classList.add('active');
+
+        // Update page title
+        const titles = {
+            overview: 'Genel Bakış',
+            bot: 'Bot Kontrolü',
+            'api-keys': 'API Anahtarları',
+            subscription: 'Abonelik',
+            settings: 'Ayarlar'
+        };
+        
+        document.getElementById('page-title').textContent = titles[page] || 'Dashboard';
+        this.currentPage = page;
+
+        // Load page-specific data
+        if (page === 'overview') {
+            this.loadDashboardData();
+        } else if (page === 'subscription') {
+            this.loadPaymentInfo();
+        } else if (page === 'settings') {
+            this.loadSettingsData();
+        }
+    }
+
+    async loadSettingsData() {
+        if (!this.user) return;
+        
+        document.getElementById('full-name').value = this.user.full_name || '';
+        document.getElementById('email').value = this.user.email || '';
+        document.getElementById('language').value = this.user.language || 'tr';
+    }
+
+    // UI Methods
+    showLandingPage() {
+        document.getElementById('landing-page').style.display = 'block';
+        document.getElementById('dashboard').style.display = 'none';
+    }
+
+    showDashboard() {
+        document.getElementById('landing-page').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'flex';
+        this.loadDashboardData();
+        this.navigateToPage('overview');
+    }
+
+    showModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.add('active');
+        }
+    }
+
+    closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('active');
+        }
+    }
+
+    showNotification(message, type = 'info') {
+        const notification = document.getElementById('notification');
+        const icon = notification.querySelector('.notification-icon');
+        const messageEl = notification.querySelector('.notification-message');
+
+        // Set icon based on type
+        const icons = {
+            success: 'fas fa-check-circle',
+            error: 'fas fa-exclamation-circle',
+            info: 'fas fa-info-circle',
+            warning: 'fas fa-exclamation-triangle'
+        };
+
+        icon.className = `notification-icon ${icons[type] || icons.info}`;
+        messageEl.textContent = message;
+        
+        notification.className = `notification ${type}`;
+        notification.classList.add('show');
+
+        // Auto hide after 5 seconds
+        setTimeout(() => {
+            notification.classList.remove('show');
+        }, 5000);
+    }
+
+    // Utility Methods
+    async apiCall(endpoint, method = 'GET', data = null) {
+        const options = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        };
+
+        if (this.token) {
+            options.headers['Authorization'] = `Bearer ${this.token}`;
+        }
+
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
+
+        const response = await fetch(`${this.apiUrl}${endpoint}`, options);
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.detail || result.message || 'API request failed');
+        }
+
+        return result;
+    }
+
+    formatUptime(seconds) {
+        if (seconds < 60) return `${seconds}s`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+        return `${Math.floor(seconds / 86400)}d`;
+    }
+
+    calculateRemainingTime(endDate) {
+        const now = new Date();
+        const end = new Date(endDate);
+        const diff = end - now;
+
+        if (diff <= 0) return 'Süresi doldu';
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+        if (days > 0) return `${days} gün`;
+        if (hours > 0) return `${hours} saat`;
+        return 'Bugün bitiyor';
+    }
+
+    scrollToFeatures() {
+        document.getElementById('features').scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+// Global functions for HTML onclick handlers
+function showLoginModal() {
+    app.showModal('login-modal');
+}
+
+function showRegisterModal() {
+    app.showModal('register-modal');
+}
+
+function showForgotPasswordModal() {
+    app.closeModal('login-modal');
+    app.showModal('forgot-password-modal');
+}
+
+function closeModal(modalId) {
+    app.closeModal(modalId);
+}
+
+function logout() {
+    app.logout();
+}
+
+function startBot() {
+    app.startBot();
+}
+
+function stopBot() {
+    app.stopBot();
+}
+
+function saveApiKeys() {
+    app.saveApiKeys();
+}
+
+function deleteApiKeys() {
+    app.deleteApiKeys();
+}
+
+function copyWalletAddress() {
+    app.copyWalletAddress();
+}
+
+function requestPayment() {
+    app.requestPayment();
+}
+
+function updateProfile() {
+    app.updateProfile();
+}
+
+function deleteAccount() {
+    app.deleteAccount();
+}
+
+function scrollToFeatures() {
+    app.scrollToFeatures();
+}
+
+// Initialize app when DOM is loaded
+let app;
+document.addEventListener('DOMContentLoaded', () => {
+    app = new EzyagoApp();
+});

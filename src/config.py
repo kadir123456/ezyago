@@ -1,0 +1,63 @@
+import os
+from dotenv import load_dotenv
+from cryptography.fernet import Fernet
+
+load_dotenv()
+
+class Settings:
+    # --- Firebase Configuration ---
+    FIREBASE_CREDENTIALS_JSON: str = os.getenv("FIREBASE_CREDENTIALS_JSON")
+    FIREBASE_DATABASE_URL: str = os.getenv("FIREBASE_DATABASE_URL")
+    
+    # --- Encryption ---
+    ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY")  # Master key for API encryption
+    
+    # --- Admin Configuration ---
+    ADMIN_EMAIL: str = "bilwininc@gmail.com"
+    
+    # --- Payment Configuration ---
+    USDT_WALLET_ADDRESS: str = os.getenv("USDT_WALLET_ADDRESS", "")
+    
+    # --- JWT Configuration ---
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this")
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_HOURS: int = 24
+    
+    # --- Trading Configuration ---
+    LEVERAGE: int = 10
+    ORDER_SIZE_USDT: float = 25.0
+    TIMEFRAME: str = "15m"
+    STOP_LOSS_PERCENT: float = 0.04
+    
+    # --- Subscription Configuration ---
+    TRIAL_DAYS: int = 7
+    SUBSCRIPTION_PRICE_USDT: float = 10.0
+    SUBSCRIPTION_DAYS: int = 30
+    
+    # --- Binance Configuration ---
+    BINANCE_BASE_URL_LIVE = "https://fapi.binance.com"
+    BINANCE_BASE_URL_TEST = "https://testnet.binancefuture.com"
+    BINANCE_WS_URL_LIVE = "wss://fstream.binance.com"
+    BINANCE_WS_URL_TEST = "wss://stream.binancefuture.com"
+    
+    # --- Rate Limiting ---
+    RATE_LIMIT_REQUESTS: int = 100
+    RATE_LIMIT_WINDOW: int = 3600  # 1 hour
+    
+    # --- Security ---
+    ALLOWED_HOSTS: list = ["ezyago.com", "www.ezyago.com", "*.onrender.com"] if os.getenv("ENVIRONMENT") == "production" else ["*"]
+    
+    # --- Email Configuration (for future use) ---
+    SMTP_SERVER: str = os.getenv("SMTP_SERVER", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USERNAME: str = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    
+    @property
+    def fernet_cipher(self):
+        """Returns Fernet cipher for encryption/decryption"""
+        if not self.ENCRYPTION_KEY:
+            raise ValueError("ENCRYPTION_KEY environment variable is required")
+        return Fernet(self.ENCRYPTION_KEY.encode())
+
+settings = Settings()
