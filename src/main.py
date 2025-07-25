@@ -707,7 +707,7 @@ async def get_payment_wallet():
     return {
         "wallet_address": settings.USDT_WALLET_ADDRESS,
         "currency": "USDT",
-        "network": "TRC-20 or BEP-20",
+        "network": "TRC-20",
         "amount": settings.SUBSCRIPTION_PRICE_USDT,
         "note": "Please include your email address in the transaction memo"
     }
