@@ -193,6 +193,9 @@ class EzyagoApp {
             this.showNotification('Geçerli bir e-posta adresi girin.', 'error');
             return;
         }
+        
+        console.log('🔄 Starting registration process...');
+        
         try {
             const response = await this.apiCall('/api/auth/register', 'POST', {
                 full_name: fullName,
@@ -209,8 +212,10 @@ class EzyagoApp {
                 this.closeModal('register-modal');
                 this.showDashboard();
                 this.showNotification('Hesabınız başarıyla oluşturuldu! 7 günlük deneme süreniz başladı.', 'success');
+                console.log('✅ Registration successful');
             }
         } catch (error) {
+            console.error('❌ Registration error:', error);
             let errorMessage = 'Kayıt olurken hata oluştu';
             
             if (error.message.includes('already exists')) {
@@ -219,6 +224,10 @@ class EzyagoApp {
                 errorMessage = 'Şifre çok zayıf. En az 6 karakter kullanın.';
             } else if (error.message.includes('email')) {
                 errorMessage = 'Geçersiz e-posta adresi.';
+            } else if (error.message.includes('Failed to create')) {
+                errorMessage = 'Hesap oluşturulamadı. Lütfen bilgilerinizi kontrol edin.';
+            } else {
+                errorMessage = `Kayıt hatası: ${error.message}`;
             }
             
             this.showNotification(errorMessage, 'error');
