@@ -448,54 +448,96 @@ class EzyagoApp {
         }
 
         try {
+            console.log(`🔄 Starting bot for symbol: ${symbol}`);
             const response = await this.apiCall('/api/bot/start', 'POST', { symbol });
             
-            if (response && response.message) {
-                this.showNotification(response.message, 'success');
-            } else {
-                this.showNotification(`Bot ${symbol} için başlatıldı!`, 'success');
+            // Extract message from response
+            let message = 'Bot başlatıldı!';
+            if (response) {
+                if (typeof response === 'string') {
+                    message = response;
+                } else if (response.message) {
+                    message = response.message;
+                } else if (response.detail) {
+                    message = response.detail;
+                } else if (response.status_message) {
+                    message = response.status_message;
+                } else {
+                    message = `Bot ${symbol} için başarıyla başlatıldı!`;
+                }
             }
+            
+            console.log(`✅ Bot start success: ${message}`);
+            this.showNotification(message, 'success');
             
             this.loadDashboardData();
         } catch (error) {
             console.error('Bot start error:', error);
-            let errorMessage = 'Bot başlatılırken hata oluştu';
+            let errorMessage = 'Bot başlatılırken hata oluştu.';
             
-            if (typeof error === 'string') {
+            // Extract error message properly
+            if (error && typeof error === 'object') {
+                if (error.message) {
+                    errorMessage = error.message;
+                } else if (error.detail) {
+                    errorMessage = error.detail;
+                } else if (error.error) {
+                    errorMessage = error.error;
+                } else {
+                    errorMessage = JSON.stringify(error);
+                }
+            } else if (typeof error === 'string') {
                 errorMessage = error;
-            } else if (error && error.message) {
-                errorMessage = error.message;
-            } else if (error && typeof error === 'object') {
-                errorMessage = JSON.stringify(error);
             }
             
+            console.error(`❌ Bot start failed: ${errorMessage}`);
             this.showNotification(errorMessage, 'error');
         }
     }
 
     async stopBot() {
         try {
+            console.log('🔄 Stopping bot...');
             const response = await this.apiCall('/api/bot/stop', 'POST');
             
-            if (response && response.message) {
-                this.showNotification(response.message, 'info');
-            } else {
-                this.showNotification('Bot durduruldu.', 'info');
+            // Extract message from response
+            let message = 'Bot durduruldu.';
+            if (response) {
+                if (typeof response === 'string') {
+                    message = response;
+                } else if (response.message) {
+                    message = response.message;
+                } else if (response.detail) {
+                    message = response.detail;
+                } else if (response.status_message) {
+                    message = response.status_message;
+                }
             }
+            
+            console.log(`✅ Bot stop success: ${message}`);
+            this.showNotification(message, 'info');
             
             this.loadDashboardData();
         } catch (error) {
             console.error('Bot stop error:', error);
-            let errorMessage = 'Bot durdurulurken hata oluştu';
+            let errorMessage = 'Bot durdurulurken hata oluştu.';
             
-            if (typeof error === 'string') {
+            // Extract error message properly
+            if (error && typeof error === 'object') {
+                if (error.message) {
+                    errorMessage = error.message;
+                } else if (error.detail) {
+                    errorMessage = error.detail;
+                } else if (error.error) {
+                    errorMessage = error.error;
+                } else {
+                    errorMessage = JSON.stringify(error);
+                }
+            } else if (typeof error === 'string') {
                 errorMessage = error;
-            } else if (error && error.message) {
-                errorMessage = error.message;
-            } else if (error && typeof error === 'object') {
-                errorMessage = JSON.stringify(error);
             }
             
+            console.error(`❌ Bot stop failed: ${errorMessage}`);
             this.showNotification(errorMessage, 'error');
         }
     }
@@ -733,16 +775,28 @@ class EzyagoApp {
             
             if (contentType && contentType.includes('application/json')) {
                 result = await response.json();
+                console.log('📦 JSON Response:', result);
             } else {
                 const text = await response.text();
-                console.log('📄 Non-JSON response:', text);
+                console.log('📄 Text Response:', text);
                 result = { message: text };
             }
-            
-            console.log('📦 API Response:', result);
 
             if (!response.ok) {
-                const errorMessage = result.detail || result.message || `HTTP ${response.status}`;
+                let errorMessage = `HTTP ${response.status}`;
+                
+                if (result) {
+                    if (result.detail) {
+                        errorMessage = result.detail;
+                    } else if (result.message) {
+                        errorMessage = result.message;
+                    } else if (result.error) {
+                        errorMessage = result.error;
+                    } else if (typeof result === 'string') {
+                        errorMessage = result;
+                    }
+                }
+                
                 console.error('❌ API Error:', errorMessage);
                 throw new Error(errorMessage);
             }
