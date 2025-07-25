@@ -57,4 +57,8 @@ class TradingStrategy:
         return result
 
 # Global instance
+<<<<<<< HEAD
 trading_strategy = TradingStrategy(short_ema_period=9, long_ema_period=21)
+=======
+trading_strategy = TradingStrategy(short_ema_period=9, long_ema_period=21)
+>>>>>>> cc49fe43d70078d3e2cd494342b92a34e13b3d0b
