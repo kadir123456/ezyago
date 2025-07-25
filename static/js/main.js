@@ -205,9 +205,6 @@ class EzyagoApp {
                 this.closeModal('login-modal');
                 this.showDashboard();
                 this.showNotification('Başarıyla giriş yaptınız!', 'success');
-                
-                // Load initial data
-                await this.loadUserProfile();
             }
         } catch (error) {
             console.error('❌ Login error:', error);
@@ -276,9 +273,6 @@ class EzyagoApp {
                 this.showDashboard();
                 this.showNotification('Hesabınız başarıyla oluşturuldu! 7 günlük deneme süreniz başladı.', 'success');
                 console.log('✅ Registration successful');
-                
-                // Load initial data
-                await this.loadUserProfile();
             }
         } catch (error) {
             console.error('❌ Registration error:', error);

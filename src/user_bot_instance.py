@@ -75,18 +75,13 @@ class UserBotInstance:
                 is_testnet=self.is_testnet
             )
             
-            try:
-                await self.binance_client.initialize()
-                print(f"✅ Binance client initialized for user {self.user_email}")
-            except Exception as e:
-                print(f"❌ Failed to initialize Binance client for user {self.user_email}: {e}")
-                raise Exception("Binance bağlantısı kurulamadı. API anahtarlarınızı kontrol edin.")
+            await self.binance_client.initialize()
             
             # Get symbol info and set precision
             symbol_info = await self.binance_client.get_symbol_info(self.current_symbol)
             if not symbol_info:
                 print(f"❌ Symbol {self.current_symbol} not found for user {self.user_email}")
-                raise Exception(f"Sembol {self.current_symbol} bulunamadı. Geçerli bir sembol girin.")
+                return False
             
             self.quantity_precision = self._get_precision_from_filter(symbol_info, 'LOT_SIZE', 'stepSize')
             self.price_precision = self._get_precision_from_filter(symbol_info, 'PRICE_FILTER', 'tickSize')
@@ -94,7 +89,7 @@ class UserBotInstance:
             # Set leverage
             if not await self.binance_client.set_leverage(self.current_symbol, self.leverage):
                 print(f"❌ Failed to set leverage for user {self.user_email}")
-                raise Exception("Kaldıraç ayarlanamadı. API izinlerinizi kontrol edin.")
+                return False
             
             # Get historical data
             self.klines = await self.binance_client.get_historical_klines(
@@ -105,7 +100,7 @@ class UserBotInstance:
             
             if not self.klines:
                 print(f"❌ Failed to get historical data for user {self.user_email}")
-                raise Exception("Geçmiş veriler alınamadı. Bağlantınızı kontrol edin.")
+                return False
             
             # Start WebSocket connection
             self.websocket_task = asyncio.create_task(self._websocket_handler())
@@ -117,6 +112,7 @@ class UserBotInstance:
         except Exception as e:
             print(f"❌ Error starting bot for user {self.user_email}: {e}")
             await self._cleanup()
+            return False
     
     async def stop(self):
         """Stop the bot for this user"""

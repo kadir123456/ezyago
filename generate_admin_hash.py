@@ -36,8 +36,4 @@ def generate_admin_hash():
     print("\n⚠️  Güvenlik için ADMIN_PASSWORD satırını silin!")
 
 if __name__ == "__main__":
-<<<<<<< HEAD
     generate_admin_hash()
-=======
-    generate_admin_hash()
->>>>>>> 6aefa7d6c4b534d4cb92a79096ca1e84eba060e3
