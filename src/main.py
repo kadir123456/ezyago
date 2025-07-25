@@ -16,6 +16,7 @@ from .models import *
 from .middleware import SecurityMiddleware, LoggingMiddleware, ErrorHandlerMiddleware
 from .rate_limiter import start_rate_limiter_cleanup
 from .encryption import encryption_manager
+from .bot_manager import bot_manager
 
 # Background tasks
 background_tasks = []
@@ -39,11 +40,13 @@ async def lifespan(app: FastAPI):
     # Start background tasks
     print("🔄 Starting background tasks...")
     background_tasks.append(asyncio.create_task(start_rate_limiter_cleanup()))
+    background_tasks.append(asyncio.create_task(bot_manager.cleanup_inactive_bots()))
     
     yield
     
     # Cleanup
     print("🛑 Shutting down...")
+    await bot_manager.stop_all_bots()
     for task in background_tasks:
         task.cancel()
         try:
@@ -362,12 +365,15 @@ async def start_bot(request: BotControl, current_user: UserData = Depends(get_ac
         
         print(f"✅ All checks passed for user: {current_user.email}, starting bot...")
         
-        # Update user status (simulated for now)
-        await firebase_manager.update_user(current_user.uid, {
-            'bot_status': BotStatus.RUNNING.value,
-            'current_symbol': symbol,
-            'bot_started_at': datetime.utcnow()
-        })
+        # Start bot using bot manager
+        success = await bot_manager.start_user_bot(current_user, symbol)
+        
+        if not success:
+            print(f"❌ Failed to start bot for user: {current_user.email}")
+            raise HTTPException(
+                status_code=500,
+                detail="Bot başlatılamadı. API anahtarlarınızı kontrol edin."
+            )
         
         success_message = f"Bot {symbol} sembolü için başarıyla başlatıldı!"
         print(f"✅ Bot started successfully for user {current_user.email}: {success_message}")
@@ -396,12 +402,12 @@ async def stop_bot(current_user: UserData = Depends(get_current_user)):
             print(f"⚠️ Bot not running for user: {current_user.email}")
             raise HTTPException(status_code=400, detail="Bot zaten durdurulmuş")
         
-        # Update user status
-        await firebase_manager.update_user(current_user.uid, {
-            'bot_status': BotStatus.STOPPED.value,
-            'current_symbol': None,
-            'bot_started_at': None
-        })
+        # Stop bot using bot manager
+        success = await bot_manager.stop_user_bot(current_user.uid)
+        
+        if not success:
+            print(f"❌ Failed to stop bot for user: {current_user.email}")
+            raise HTTPException(status_code=500, detail="Bot durdurulamadı")
         
         success_message = "Bot başarıyla durduruldu"
         print(f"✅ Bot stopped for user: {current_user.email}")
@@ -422,22 +428,19 @@ async def stop_bot(current_user: UserData = Depends(get_current_user)):
 async def get_bot_status(current_user: UserData = Depends(get_current_user)):
     """Get bot status for authenticated user"""
     try:
-        # Get fresh user data
-        fresh_user = await firebase_manager.get_user(current_user.uid)
-        if not fresh_user:
-            fresh_user = current_user
+        # Get bot status from bot manager
+        bot_status = await bot_manager.get_user_bot_status(current_user.uid)
         
+        # Get fresh user data for stats
+        fresh_user = await firebase_manager.get_user(current_user.uid) or current_user
+        
+        # Merge bot status with user stats
         return {
-            "status": fresh_user.bot_status.value if fresh_user.bot_status else "stopped",
-            "symbol": fresh_user.current_symbol,
-            "position_side": None,
-            "last_signal": None,
-            "uptime": 0,
+            **bot_status,
             "total_trades": fresh_user.total_trades,
             "winning_trades": fresh_user.winning_trades,
             "losing_trades": fresh_user.losing_trades,
-            "total_pnl": fresh_user.total_pnl,
-            "message": f"Bot durumu: {fresh_user.bot_status.value if fresh_user.bot_status else 'stopped'}"
+            "total_pnl": fresh_user.total_pnl
         }
         
     except Exception as e:
