@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr
+from pydantic import validator
 from typing import Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -20,16 +21,24 @@ class BotStatus(str, Enum):
 
 # --- Request Models ---
 class UserRegister(BaseModel):
-    email: EmailStr
+    email: str
     password: str
     full_name: str
-    language: str = "tr"  # tr or en
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
 class PasswordReset(BaseModel):
+    email: str
+    
+    @validator('email')
+    def validate_email(cls, v):
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, v):
+            raise ValueError('Invalid email format')
+        return v.lower()
     email: EmailStr
 
 class PasswordResetConfirm(BaseModel):

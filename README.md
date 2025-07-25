@@ -1,2 +1,0 @@
-# ezyago
-Bot

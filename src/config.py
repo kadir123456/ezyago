@@ -14,7 +14,20 @@ class Settings:
     
     # --- Admin Configuration ---
     ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "bilwininc@gmail.com")
-    ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "admin123456")  # Change this!
+    ADMIN_PASSWORD_HASH: str = os.getenv("ADMIN_PASSWORD_HASH", "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBdXzgVB/VGO5i")  # Default: admin123456
+    
+    @classmethod
+    def get_admin_password_hash(cls) -> str:
+        """Get admin password hash, create from plain password if needed"""
+        # If ADMIN_PASSWORD is set (plain text), hash it
+        plain_password = os.getenv("ADMIN_PASSWORD")
+        if plain_password:
+            from passlib.context import CryptContext
+            pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+            return pwd_context.hash(plain_password)
+        
+        # Otherwise use the hash directly
+        return cls.ADMIN_PASSWORD_HASH
     
     # --- Payment Configuration ---
     USDT_WALLET_ADDRESS: str = os.getenv("USDT_WALLET_ADDRESS", "TYourUSDTWalletAddressHere")

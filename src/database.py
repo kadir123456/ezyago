@@ -48,6 +48,7 @@ class FirebaseManager:
             
             # Check if admin user
             if user_data.email == settings.ADMIN_EMAIL:
+                from .models import UserRole
                 user_data.role = UserRole.ADMIN
                 print(f"✅ Creating admin user: {user_data.email}")
             
