@@ -7,7 +7,7 @@ load_dotenv()
 class Settings:
     # --- Firebase Configuration ---
     FIREBASE_CREDENTIALS_JSON: str = os.getenv("FIREBASE_CREDENTIALS_JSON")
-    FIREBASE_DATABASE_URL: str = os.getenv("FIREBASE_DATABASE_URL")
+    FIREBASE_DATABASE_URL: str = os.getenv("FIREBASE_DATABASE_URL", "https://aviatoronline-6c2b4-default-rtdb.firebaseio.com")
     
     # --- Encryption ---
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY")  # Master key for API encryption
@@ -46,6 +46,9 @@ class Settings:
     
     # --- Security ---
     ALLOWED_HOSTS: list = ["ezyago.com", "www.ezyago.com", "*.onrender.com"] if os.getenv("ENVIRONMENT") == "production" else ["*"]
+    
+    # --- Environment ---
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     
     # --- Email Configuration (for future use) ---
     SMTP_SERVER: str = os.getenv("SMTP_SERVER", "")
