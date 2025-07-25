@@ -94,14 +94,22 @@ class AuthManager:
     async def register_user(self, email: str, password: str, full_name: str, language: str = "tr") -> Optional[UserData]:
         """Register a new user"""
         try:
+            print(f"🔄 Starting registration for: {email}")
+            
             # Check if user already exists in Realtime Database
             existing_user = await firebase_manager.get_user_by_email(email)
             if existing_user:
                 print(f"❌ User already exists in database: {email}")
                 return None
             
+            # Validate password strength
+            if len(password) < 6:
+                print(f"❌ Password too weak for {email}")
+                return None
+            
             # First, create user in Firebase Authentication
             try:
+                print(f"🔄 Creating Firebase Auth user for: {email}")
                 firebase_user = firebase_auth.create_user(
                     email=email,
                     password=password,
@@ -116,11 +124,15 @@ class AuthManager:
             except firebase_auth.WeakPasswordError as e:
                 print(f"❌ Weak password error: {e}")
                 return None
+            except firebase_auth.InvalidEmailError as e:
+                print(f"❌ Invalid email error: {e}")
+                return None
             except Exception as e:
                 print(f"❌ Firebase Auth creation error: {e}")
                 return None
             
             # If Firebase Auth creation successful, create user in Realtime Database
+            print(f"🔄 Creating user in Realtime Database for: {email}")
             password_hash = self.get_password_hash(password)
             verification_token = self.generate_verification_token()
             
@@ -151,6 +163,8 @@ class AuthManager:
                 
         except Exception as e:
             print(f"❌ Registration error for {email}: {e}")
+            import traceback
+            print(f"❌ Full traceback: {traceback.format_exc()}")
             return None
     
     async def verify_email(self, token: str) -> bool:
