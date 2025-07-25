@@ -511,10 +511,14 @@ class EzyagoApp {
 
         try {
             console.log(`🔄 Starting bot for symbol: ${symbol}`);
+<<<<<<< HEAD
             const response = await this.apiCall('/api/bot/start', 'POST', { 
                 action: 'start',
                 symbol: symbol 
             });
+=======
+            const response = await this.apiCall('/api/bot/start', 'POST', { symbol });
+>>>>>>> 6aefa7d6c4b534d4cb92a79096ca1e84eba060e3
             
             // Extract message from response
             let message = 'Bot başlatıldı!';
@@ -541,12 +545,27 @@ class EzyagoApp {
             let errorMessage = 'Bot başlatılırken hata oluştu.';
             
             // Extract error message properly
+<<<<<<< HEAD
             if (typeof error === 'string') {
                 errorMessage = error;
             } else if (error && error.message) {
                 errorMessage = error.message;
             } else if (error) {
                 errorMessage = String(error);
+=======
+            if (error && typeof error === 'object') {
+                if (error.message) {
+                    errorMessage = error.message;
+                } else if (error.detail) {
+                    errorMessage = error.detail;
+                } else if (error.error) {
+                    errorMessage = error.error;
+                } else {
+                    errorMessage = JSON.stringify(error);
+                }
+            } else if (typeof error === 'string') {
+                errorMessage = error;
+>>>>>>> 6aefa7d6c4b534d4cb92a79096ca1e84eba060e3
             }
             
             console.error(`❌ Bot start failed: ${errorMessage}`);
@@ -845,7 +864,11 @@ class EzyagoApp {
             
             if (contentType && contentType.includes('application/json')) {
                 result = await response.json();
+<<<<<<< HEAD
                 console.log('📦 JSON Response:', JSON.stringify(result, null, 2));
+=======
+                console.log('📦 JSON Response:', result);
+>>>>>>> 6aefa7d6c4b534d4cb92a79096ca1e84eba060e3
             } else {
                 const text = await response.text();
                 console.log('📄 Text Response:', text);
@@ -856,23 +879,36 @@ class EzyagoApp {
                 let errorMessage = `HTTP ${response.status}`;
                 
                 if (result) {
+<<<<<<< HEAD
                     if (typeof result === 'string') {
                         errorMessage = result;
                     } else if (Array.isArray(result.detail)) {
                         // FastAPI validation errors
                         errorMessage = result.detail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(', ');
                     } else if (result.detail) {
+=======
+                    if (result.detail) {
+>>>>>>> 6aefa7d6c4b534d4cb92a79096ca1e84eba060e3
                         errorMessage = result.detail;
                     } else if (result.message) {
                         errorMessage = result.message;
                     } else if (result.error) {
                         errorMessage = result.error;
+<<<<<<< HEAD
                     } else if (typeof result === 'object') {
                         errorMessage = JSON.stringify(result);
                     }
                 }
                 
                 console.error('❌ API Error:', errorMessage, 'Full response:', result);
+=======
+                    } else if (typeof result === 'string') {
+                        errorMessage = result;
+                    }
+                }
+                
+                console.error('❌ API Error:', errorMessage);
+>>>>>>> 6aefa7d6c4b534d4cb92a79096ca1e84eba060e3
                 throw new Error(errorMessage);
             }
 
