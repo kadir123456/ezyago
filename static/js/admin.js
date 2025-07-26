@@ -52,7 +52,7 @@ class EzyagoAdmin {
                 if (this.currentPage === 'dashboard') {
                     this.loadDashboardStats();
                 }
-            }, 30000); // Refresh every 30 seconds
+            }, 120000); // Refresh every 30 seconds
         }
     }
 
