@@ -1,3 +1,5 @@
+# GÜNCELLENMİŞ VE TAM database.py DOSYASI
+
 import firebase_admin
 from firebase_admin import credentials, db, auth
 import json
@@ -6,7 +8,6 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta, timezone
 from .config import settings
 from .models import UserData, TradeData, PaymentRequest, SubscriptionStatus, BotStatus
-import uuid
 
 class FirebaseManager:
     def __init__(self):
@@ -39,34 +40,17 @@ class FirebaseManager:
         return self.initialized and self.db_ref is not None
     
     # --- User Management ---
-    async def create_user(self, user_data: UserData) -> bool:
-        """Create a new user in the database"""
+    async def create_user(self, user_data: dict) -> bool:
+        """Create a new user in the database from a dictionary."""
         try:
-            if not self.is_ready():
-                print("❌ Firebase not ready for user creation")
-                return False
-            
-            if user_data.email == settings.ADMIN_EMAIL:
-                from .models import UserRole
-                user_data.role = UserRole.ADMIN
-                print(f"✅ Creating admin user: {user_data.email}")
-            
-            user_data.trial_end_date = datetime.now(timezone.utc) + timedelta(days=settings.TRIAL_DAYS)
-            user_data.created_at = datetime.now(timezone.utc)
-            
-            user_dict = user_data.dict()
-            for key, value in user_dict.items():
-                if isinstance(value, datetime):
-                    user_dict[key] = value.isoformat()
-            
-            self.db_ref.child('users').child(user_data.uid).set(user_dict)
-            print(f"✅ User {user_data.email} created successfully")
+            if not self.is_ready(): return False
+            self.db_ref.child('users').child(user_data['uid']).set(user_data)
+            print(f"✅ User {user_data['email']} created successfully")
             return True
-            
         except Exception as e:
             print(f"❌ Error creating user: {e}")
             return False
-    
+
     async def get_user(self, uid: str) -> Optional[UserData]:
         """Get user data by UID and ensure bot settings have default values."""
         try:
@@ -145,26 +129,20 @@ class FirebaseManager:
     async def delete_user(self, uid: str) -> bool:
         """Delete user and all associated data"""
         try:
-            if not self.is_ready():
-                return False
-            
+            if not self.is_ready(): return False
             auth.delete_user(uid)
             self.db_ref.child('users').child(uid).delete()
             self.db_ref.child('trades').child(uid).delete()
-            
-            payments_ref = self.db_ref.child('payments')
-            payments = payments_ref.order_by_child('user_id').equal_to(uid).get()
+            payments = self.db_ref.child('payments').order_by_child('user_id').equal_to(uid).get()
             if payments:
-                for payment_id in payments.keys():
-                    payments_ref.child(payment_id).delete()
-            
-            print(f"✅ User {uid} and all associated data deleted")
+                for payment_id in payments:
+                    self.db_ref.child('payments').child(payment_id).delete()
+            print(f"✅ User {uid} and all associated data deleted successfully.")
             return True
-            
         except Exception as e:
             print(f"❌ Error deleting user {uid}: {e}")
             return False
-    
+
     # --- Payment Management ---
     async def create_payment_request(self, payment_data: Dict[str, Any]) -> bool:
         """Create a payment request using a dictionary."""
@@ -194,52 +172,19 @@ class FirebaseManager:
         except Exception as e:
             print(f"❌ Error updating payment {payment_id}: {e}")
             return False
-
-    async def get_pending_payments(self) -> List[Dict[str, Any]]:
-        """Get all pending payment requests"""
-        try:
-            if not self.is_ready():
-                return []
             
-            payments_ref = self.db_ref.child('payments')
-            payments_data = payments_ref.order_by_child('status').equal_to('pending').get()
-            
-            if not payments_data:
-                return []
-
-            return list(payments_data.values())
-            
-        except Exception as e:
-            print(f"❌ Error getting pending payments: {e}")
-            return []
-
     # --- Admin Functions ---
-    async def get_all_users(self) -> List[Dict[str, Any]]:
-        """Get all users for admin panel"""
+    async def get_admin_stats(self) -> dict:
+        """Get statistics for admin dashboard."""
         try:
-            if not self.is_ready():
-                return []
+            if not self.is_ready(): return {}
             
-            users_data = self.db_ref.child('users').get()
+            all_users_raw = self.db_ref.child('users').get() or {}
+            all_users = list(all_users_raw.values())
             
-            if not users_data:
-                return []
-            
-            return list(users_data.values())
-            
-        except Exception as e:
-            print(f"❌ Error getting all users: {e}")
-            return []
+            pending_payments_raw = self.db_ref.child('payments').order_by_child('status').equal_to('pending').get() or {}
+            pending_payments = list(pending_payments_raw.values())
 
-    async def get_admin_stats(self) -> Dict[str, Any]:
-        """Get statistics for admin dashboard"""
-        try:
-            if not self.is_ready():
-                return {}
-            
-            all_users = await self.get_all_users()
-            pending_payments = await self.get_pending_payments()
-            
             stats = {
                 'total_users': len(all_users),
                 'active_subscribers': len([u for u in all_users if u.get('subscription_status') == 'active']),
@@ -248,19 +193,9 @@ class FirebaseManager:
                 'total_revenue': len([u for u in all_users if u.get('subscription_status') == 'active']) * settings.SUBSCRIPTION_PRICE_USDT
             }
             return stats
-            
         except Exception as e:
             print(f"❌ Error getting admin stats: {e}")
             return {}
-
-    # --- Trading Data (Mevcut fonksiyonları koruyoruz) ---
-    async def log_trade(self, trade_data: TradeData) -> bool:
-        # Bu fonksiyonun içeriği doğru, olduğu gibi bırakıyoruz.
-        pass
-    
-    async def _update_user_stats(self, uid: str, trade_data: TradeData):
-        # Bu fonksiyonun içeriği doğru, olduğu gibi bırakıyoruz.
-        pass
 
 # Global instance
 firebase_manager = FirebaseManager()
