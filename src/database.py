@@ -51,7 +51,6 @@ class FirebaseManager:
                 user_data.role = UserRole.ADMIN
                 print(f"✅ Creating admin user: {user_data.email}")
             
-            # Saat dilimi (timezone) bilgisi ekleyerek tarihi "aware" yapıyoruz
             now_aware = datetime.now(timezone.utc)
             user_data.trial_end_date = now_aware + timedelta(days=settings.TRIAL_DAYS)
             user_data.created_at = now_aware
@@ -314,6 +313,9 @@ class FirebaseManager:
             print(f"❌ Error getting pending payments: {e}")
             return []
     
+    # approve_payment fonksiyonu main.py içinde olduğu için buradan kaldırıldı.
+    # Bu, sorumlulukların ayrılması prensibine daha uygundur.
+    
     # --- Admin Functions ---
     async def get_all_users(self) -> List[Dict[str, Any]]:
         """Get all users for admin panel"""
@@ -344,6 +346,80 @@ class FirebaseManager:
         except Exception as e:
             print(f"❌ Error getting admin stats: {e}")
             return {}
+    
+    # --- IP Whitelist Management (Mevcut kodunuzu koruyoruz) ---
+    async def create_ip_whitelist_entry(self, entry: 'IPWhitelistEntry') -> bool:
+        """Create IP whitelist entry"""
+        try:
+            if not self.is_ready():
+                return False
+            
+            entry_dict = entry.dict()
+            for key, value in entry_dict.items():
+                if isinstance(value, datetime):
+                    entry_dict[key] = value.isoformat()
+            
+            self.db_ref.child('ip_whitelist').child(entry.ip_address.replace('.', '_')).set(entry_dict)
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error creating IP whitelist entry: {e}")
+            return False
+    
+    async def get_ip_whitelist(self) -> List[Dict[str, Any]]:
+        """Get all IP whitelist entries"""
+        try:
+            if not self.is_ready():
+                return []
+            
+            whitelist_ref = self.db_ref.child('ip_whitelist')
+            whitelist_data = whitelist_ref.get()
+            
+            if not whitelist_data:
+                return []
+            
+            entries = []
+            for ip_key, entry_data in whitelist_data.items():
+                for key, value in entry_data.items():
+                    if key.endswith('_at'):
+                        if value:
+                            entry_data[key] = datetime.fromisoformat(value)
+                
+                entries.append(entry_data)
+            
+            return entries
+            
+        except Exception as e:
+            print(f"❌ Error getting IP whitelist: {e}")
+            return []
+    
+    async def update_ip_whitelist_entry(self, ip_address: str, updates: Dict[str, Any]) -> bool:
+        """Update IP whitelist entry"""
+        try:
+            if not self.is_ready():
+                return False
+            
+            ip_key = ip_address.replace('.', '_')
+            self.db_ref.child('ip_whitelist').child(ip_key).update(updates)
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error updating IP whitelist entry: {e}")
+            return False
+    
+    async def delete_ip_whitelist_entry(self, ip_address: str) -> bool:
+        """Delete IP whitelist entry"""
+        try:
+            if not self.is_ready():
+                return False
+            
+            ip_key = ip_address.replace('.', '_')
+            self.db_ref.child('ip_whitelist').child(ip_key).delete()
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error deleting IP whitelist entry: {e}")
+            return False
 
 # Global instance
 firebase_manager = FirebaseManager()
