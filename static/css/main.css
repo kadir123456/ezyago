@@ -1820,10 +1820,22 @@ html, body {
         border-bottom-color: var(--primary-color);
     }
     
+    /* BAŞLIK KISMI İÇİN DÜZELTME BURADA */
     .dashboard-header {
-        flex-direction: column;
-        gap: var(--spacing-md);
-        text-align: center;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .dashboard-header h1 {
+        font-size: var(--font-size-lg);
+        margin: 0;
+    }
+
+    /* KULLANICI BİLGİSİ ARTIK AYARLARDA OLDUĞU İÇİN BU KODA İHTİYAÇ YOK AMA ZARARI DA YOKTUR */
+    .user-details .user-email {
+        display: none;
     }
     
     .stats-grid {
@@ -1856,83 +1868,5 @@ html, body {
         margin: var(--spacing-md);
         max-width: none;
         width: calc(100% - 2 * var(--spacing-md));
-    }
-}
-
-@media (max-width: 480px) {
-    .container {
-        padding: 0 var(--spacing-xs);
-    }
-    
-    .navbar {
-        padding: 0 var(--spacing-xs);
-    }
-    
-    .nav-container {
-        padding: 0 var(--spacing-xs);
-    }
-    
-    .hero-title {
-        font-size: var(--font-size-2xl);
-    }
-    
-    .hero-subtitle {
-        font-size: var(--font-size-lg);
-    }
-    
-    .hero-container {
-        padding: 0 var(--spacing-sm);
-    }
-    
-    .hero-stats {
-        flex-direction: column;
-        gap: var(--spacing-md);
-    }
-    
-    .features-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .feature-card {
-        padding: var(--spacing-lg);
-    }
-    
-    .pricing-cards {
-        grid-template-columns: 1fr;
-    }
-    
-    .pricing-card {
-        margin: 0 var(--spacing-sm);
-    }
-    
-    .dashboard-content {
-        padding: var(--spacing-md);
-    }
-    
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .settings-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .wallet-address {
-        flex-direction: column;
-    }
-    
-    .modal-content {
-        margin: var(--spacing-sm);
-        width: calc(100% - 2 * var(--spacing-sm));
-    }
-    
-    .btn {
-        padding: var(--spacing-md);
-        font-size: var(--font-size-base);
-    }
-    
-    .form-input {
-        padding: var(--spacing-md);
-        font-size: var(--font-size-base);
     }
 }
