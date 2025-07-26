@@ -1792,18 +1792,27 @@ html, body {
     .sidebar {
         width: 100%;
         height: auto;
+        flex-shrink: 0;
     }
     
     .sidebar-nav {
         display: flex;
-        overflow-x: auto;
-        padding: var(--spacing-md);
+        overflow-x: initial;
+        justify-content: space-around;
+        padding: var(--spacing-sm) 0;
     }
     
     .nav-item {
-        white-space: nowrap;
+        white-space: normal;
         border-left: none;
         border-bottom: 3px solid transparent;
+        padding: var(--spacing-sm) var(--spacing-md);
+        flex: 1;
+        justify-content: center;
+    }
+
+    .sidebar-nav .nav-item span {
+        display: none;
     }
     
     .nav-item.active {
