@@ -1,6 +1,7 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -486,7 +487,7 @@ async def update_bot_settings(settings_data: BotSettings, current_user: UserData
         raise HTTPException(status_code=500, detail="Bot ayarları güncellenirken hata oluştu")
 
 # Dosyanızın en üstüne, diğer importların yanına bunu eklediğinizden emin olun:
-from datetime import timezone
+
 
 # ... Diğer kodlarınız ...
 
@@ -549,6 +550,57 @@ async def get_admin_stats(current_admin: UserData = Depends(get_current_admin)):
     except Exception as e:
         print(f"❌ Admin stats error: {e}")
         raise HTTPException(status_code=500, detail="İstatistikler alınırken hata oluştu")
+
+# YENİ EKLENEN ÖDEME ONAYLAMA FONKSİYONU
+@app.post("/api/admin/payments/{payment_id}/approve")
+async def approve_payment(
+    payment_id: str,
+    current_admin: UserData = Depends(get_current_admin)
+):
+    """
+    Bir ödemeyi onaylar ve kullanıcıya 30 gün abonelik tanımlar.
+    """
+    try:
+        # 1. Ödeme kaydını Firebase'den al
+        payment_data = await firebase_manager.get_payment(payment_id)
+        if not payment_data:
+            raise HTTPException(status_code=404, detail="Ödeme bulunamadı.")
+        
+        if payment_data.get("status") != "pending":
+            raise HTTPException(status_code=400, detail="Bu ödeme zaten işlenmiş.")
+
+        user_id = payment_data.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Ödemeye bağlı kullanıcı ID'si bulunamadı.")
+
+        # 2. Yeni abonelik bitiş tarihini hesapla
+        start_date = datetime.now(timezone.utc)
+        new_end_date = start_date + timedelta(days=30)
+        end_date_iso_string = new_end_date.isoformat()
+
+        # 3. Kullanıcının abonelik bilgilerini güncelle
+        user_updates = {
+            "subscription_status": "active",
+            "subscription_end_date": end_date_iso_string
+        }
+        await firebase_manager.update_user(user_id, user_updates)
+
+        # 4. Ödeme kaydının durumunu güncelle
+        payment_updates = {
+            "status": "approved",
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "processed_by": current_admin.uid
+        }
+        await firebase_manager.update_payment(payment_id, payment_updates)
+
+        return {"message": "Ödeme onaylandı ve kullanıcıya 30 gün abonelik tanımlandı."}
+    
+    except HTTPException:
+        raise # FastAPI hatalarını doğrudan gönder
+    except Exception as e:
+        print(f"❌ Payment approval error for payment_id {payment_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ödeme onaylanırken bir hata oluştu.")
+
 
 # Account deletion
 @app.delete("/api/user/account")
