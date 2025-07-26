@@ -3,7 +3,7 @@ from firebase_admin import credentials, db, auth
 import json
 import os
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from .config import settings
 from .models import UserData, TradeData, PaymentRequest, SubscriptionStatus, BotStatus
 import uuid
@@ -46,15 +46,17 @@ class FirebaseManager:
                 print("❌ Firebase not ready for user creation")
                 return False
             
+            # Check if admin user
             if user_data.email == settings.ADMIN_EMAIL:
                 from .models import UserRole
                 user_data.role = UserRole.ADMIN
                 print(f"✅ Creating admin user: {user_data.email}")
             
-            now_aware = datetime.now(timezone.utc)
-            user_data.trial_end_date = now_aware + timedelta(days=settings.TRIAL_DAYS)
-            user_data.created_at = now_aware
+            # Set trial end date
+            user_data.trial_end_date = datetime.utcnow() + timedelta(days=settings.TRIAL_DAYS)
+            user_data.created_at = datetime.utcnow()
             
+            # Convert to dict and handle datetime serialization
             user_dict = user_data.dict()
             for key, value in user_dict.items():
                 if isinstance(value, datetime):
@@ -69,7 +71,7 @@ class FirebaseManager:
             return False
     
     async def get_user(self, uid: str) -> Optional[UserData]:
-        """Get user data by UID and ensure bot settings have default values."""
+        """Get user data by UID"""
         try:
             if not self.is_ready():
                 return None
@@ -80,28 +82,16 @@ class FirebaseManager:
             if not user_data:
                 return None
             
-            # --- ANA DÜZELTME: EKSİK BOT AYARLARINI EKLEME ---
-            default_settings = {
-                'bot_order_size_usdt': 25.0, 'bot_leverage': 10,
-                'bot_stop_loss_percent': 4.0, 'bot_take_profit_percent': 8.0,
-                'bot_timeframe': "15m"
-            }
-            for key, value in default_settings.items():
-                if key not in user_data:
-                    user_data[key] = value
-            # ----------------------------------------------------
-
+            # Convert datetime strings back to datetime objects
             for key, value in user_data.items():
-                if key.endswith(('_date', '_at', '_expires')) and value and isinstance(value, str):
-                    try:
-                        user_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
-                    except ValueError:
+                if key.endswith('_date') or key.endswith('_at') or key.endswith('_expires'):
+                    if value:
                         user_data[key] = datetime.fromisoformat(value)
             
             return UserData(**user_data)
             
         except Exception as e:
-            print(f"❌ Error getting user {uid}: {e}")
+            print(f"❌ Error getting user: {e}")
             return None
     
     async def get_user_by_email(self, email: str) -> Optional[UserData]:
@@ -116,11 +106,20 @@ class FirebaseManager:
             if not users_data:
                 return None
             
+            # Get the first (and should be only) user
             uid = list(users_data.keys())[0]
-            return await self.get_user(uid)
+            user_data = users_data[uid]
+            
+            # Convert datetime strings back to datetime objects
+            for key, value in user_data.items():
+                if key.endswith('_date') or key.endswith('_at') or key.endswith('_expires'):
+                    if value:
+                        user_data[key] = datetime.fromisoformat(value)
+            
+            return UserData(**user_data)
             
         except Exception as e:
-            print(f"❌ Error getting user by email {email}: {e}")
+            print(f"❌ Error getting user by email: {e}")
             return None
     
     async def update_user(self, uid: str, updates: Dict[str, Any]) -> bool:
@@ -129,6 +128,7 @@ class FirebaseManager:
             if not self.is_ready():
                 return False
             
+            # Handle datetime serialization
             for key, value in updates.items():
                 if isinstance(value, datetime):
                     updates[key] = value.isoformat()
@@ -137,7 +137,7 @@ class FirebaseManager:
             return True
             
         except Exception as e:
-            print(f"❌ Error updating user {uid}: {e}")
+            print(f"❌ Error updating user: {e}")
             return False
     
     async def delete_user(self, uid: str) -> bool:
@@ -146,10 +146,13 @@ class FirebaseManager:
             if not self.is_ready():
                 return False
             
-            auth.delete_user(uid)
+            # Delete user data
             self.db_ref.child('users').child(uid).delete()
+            
+            # Delete user's trades
             self.db_ref.child('trades').child(uid).delete()
             
+            # Delete user's payment requests
             payments_ref = self.db_ref.child('payments')
             payments = payments_ref.order_by_child('user_id').equal_to(uid).get()
             if payments:
@@ -160,7 +163,7 @@ class FirebaseManager:
             return True
             
         except Exception as e:
-            print(f"❌ Error deleting user {uid}: {e}")
+            print(f"❌ Error deleting user: {e}")
             return False
     
     # --- Subscription Management ---
@@ -171,12 +174,14 @@ class FirebaseManager:
             if not user:
                 return False
             
-            now_aware = datetime.now(timezone.utc)
+            now = datetime.utcnow()
             
-            if user.subscription_end_date and user.subscription_end_date > now_aware:
+            # If user has active subscription, extend from current end date
+            if user.subscription_end_date and user.subscription_end_date > now:
                 new_end_date = user.subscription_end_date + timedelta(days=days)
             else:
-                new_end_date = now_aware + timedelta(days=days)
+                # If subscription expired or never had one, start from now
+                new_end_date = now + timedelta(days=days)
             
             updates = {
                 'subscription_status': SubscriptionStatus.ACTIVE.value,
@@ -186,16 +191,16 @@ class FirebaseManager:
             return await self.update_user(uid, updates)
             
         except Exception as e:
-            print(f"❌ Error extending subscription for {uid}: {e}")
+            print(f"❌ Error extending subscription: {e}")
             return False
     
     async def check_expired_subscriptions(self) -> List[str]:
-        """Check and update expired subscriptions"""
+        """Check and update expired subscriptions, return list of expired user IDs"""
         try:
             if not self.is_ready():
                 return []
             
-            now_aware = datetime.now(timezone.utc)
+            now = datetime.utcnow()
             expired_users = []
             
             users_ref = self.db_ref.child('users')
@@ -205,22 +210,29 @@ class FirebaseManager:
                 return []
             
             for uid, user_data in users_data.items():
-                status = user_data.get('subscription_status')
-                end_date_str = None
+                # Check trial expiration
+                if user_data.get('subscription_status') == SubscriptionStatus.TRIAL.value:
+                    trial_end = user_data.get('trial_end_date')
+                    if trial_end:
+                        trial_end_dt = datetime.fromisoformat(trial_end)
+                        if trial_end_dt <= now:
+                            await self.update_user(uid, {
+                                'subscription_status': SubscriptionStatus.EXPIRED.value,
+                                'bot_status': BotStatus.STOPPED.value
+                            })
+                            expired_users.append(uid)
                 
-                if status == SubscriptionStatus.TRIAL.value:
-                    end_date_str = user_data.get('trial_end_date')
-                elif status == SubscriptionStatus.ACTIVE.value:
-                    end_date_str = user_data.get('subscription_end_date')
-                
-                if end_date_str:
-                    end_date_dt = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
-                    if end_date_dt <= now_aware:
-                        await self.update_user(uid, {
-                            'subscription_status': SubscriptionStatus.EXPIRED.value,
-                            'bot_status': BotStatus.STOPPED.value
-                        })
-                        expired_users.append(uid)
+                # Check subscription expiration
+                elif user_data.get('subscription_status') == SubscriptionStatus.ACTIVE.value:
+                    sub_end = user_data.get('subscription_end_date')
+                    if sub_end:
+                        sub_end_dt = datetime.fromisoformat(sub_end)
+                        if sub_end_dt <= now:
+                            await self.update_user(uid, {
+                                'subscription_status': SubscriptionStatus.EXPIRED.value,
+                                'bot_status': BotStatus.STOPPED.value
+                            })
+                            expired_users.append(uid)
             
             return expired_users
             
@@ -241,7 +253,10 @@ class FirebaseManager:
                     trade_dict[key] = value.isoformat()
             
             self.db_ref.child('trades').child(trade_data.user_id).child(trade_data.trade_id).set(trade_dict)
+            
+            # Update user statistics
             await self._update_user_stats(trade_data.user_id, trade_data)
+            
             return True
             
         except Exception as e:
@@ -255,6 +270,7 @@ class FirebaseManager:
             if not user:
                 return
             
+            # Only update stats when trade is closed
             if trade_data.status == "CLOSED":
                 updates = {
                     'total_trades': user.total_trades + 1,
@@ -270,59 +286,111 @@ class FirebaseManager:
                 print(f"📊 User stats updated for {uid}: Total PnL: ${user.total_pnl + trade_data.pnl:.2f}")
             
         except Exception as e:
-            print(f"❌ Error updating user stats for {uid}: {e}")
+            print(f"❌ Error updating user stats: {e}")
     
     # --- Payment Management ---
-    async def create_payment_request(self, payment_data: Dict[str, Any]) -> bool:
-        """Create a payment request using a dictionary."""
+    async def create_payment_request(self, payment_data: PaymentRequest) -> bool:
+        """Create a payment request"""
         try:
-            if not self.is_ready(): return False
-            self.db_ref.child('payments').child(payment_data['payment_id']).set(payment_data)
+            if not self.is_ready():
+                return False
+            
+            payment_dict = payment_data.dict()
+            for key, value in payment_dict.items():
+                if isinstance(value, datetime):
+                    payment_dict[key] = value.isoformat()
+            
+            self.db_ref.child('payments').child(payment_data.payment_id).set(payment_dict)
             return True
+            
         except Exception as e:
             print(f"❌ Error creating payment request: {e}")
             return False
-
-    async def get_payment(self, payment_id: str) -> Optional[Dict[str, Any]]:
-        """Get a single payment by its ID."""
-        try:
-            if not self.is_ready(): return None
-            return self.db_ref.child('payments').child(payment_id).get()
-        except Exception as e:
-            print(f"❌ Error getting payment {payment_id}: {e}")
-            return None
-
-    async def update_payment(self, payment_id: str, updates: Dict[str, Any]) -> bool:
-        """Update a payment record."""
-        try:
-            if not self.is_ready(): return False
-            self.db_ref.child('payments').child(payment_id).update(updates)
-            return True
-        except Exception as e:
-            print(f"❌ Error updating payment {payment_id}: {e}")
-            return False
-
-    async def get_pending_payments(self) -> List[Dict[str, Any]]:
+    
+    async def get_pending_payments(self) -> List[PaymentRequest]:
         """Get all pending payment requests"""
         try:
-            if not self.is_ready(): return []
+            if not self.is_ready():
+                return []
+            
             payments_ref = self.db_ref.child('payments')
             payments_data = payments_ref.order_by_child('status').equal_to('pending').get()
-            return list(payments_data.values()) if payments_data else []
+            
+            if not payments_data:
+                return []
+            
+            payments = []
+            for payment_id, payment_data in payments_data.items():
+                # Convert datetime strings back to datetime objects
+                for key, value in payment_data.items():
+                    if key.endswith('_at'):
+                        if value:
+                            payment_data[key] = datetime.fromisoformat(value)
+                
+                payments.append(PaymentRequest(**payment_data))
+            
+            return payments
+            
         except Exception as e:
             print(f"❌ Error getting pending payments: {e}")
             return []
     
-    # approve_payment fonksiyonu main.py içinde olduğu için buradan kaldırıldı.
-    # Bu, sorumlulukların ayrılması prensibine daha uygundur.
+    async def approve_payment(self, payment_id: str, admin_uid: str) -> bool:
+        """Approve a payment request"""
+        try:
+            if not self.is_ready():
+                return False
+            
+            # Get payment data
+            payment_ref = self.db_ref.child('payments').child(payment_id)
+            payment_data = payment_ref.get()
+            
+            if not payment_data:
+                return False
+            
+            # Update payment status
+            updates = {
+                'status': 'approved',
+                'processed_at': datetime.utcnow().isoformat(),
+                'processed_by': admin_uid
+            }
+            payment_ref.update(updates)
+            
+            # Extend user subscription
+            user_id = payment_data['user_id']
+            await self.extend_subscription(user_id, settings.SUBSCRIPTION_DAYS)
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error approving payment: {e}")
+            return False
     
     # --- Admin Functions ---
     async def get_all_users(self) -> List[Dict[str, Any]]:
         """Get all users for admin panel"""
         try:
-            if not self.is_ready(): return []
-            users_data = self.db_ref.child('users').get()
-            return list(users_data.values()) if users_data else []
+            if not self.is_ready():
+                return []
+            
+            users_ref = self.db_ref.child('users')
+            users_data = users_ref.get()
+            
+            if not users_data:
+                return []
+            
+            users = []
+            for uid, user_data in users_data.items():
+                # Convert datetime strings for display
+                for key, value in user_data.items():
+                    if key.endswith('_date') or key.endswith('_at'):
+                        if value:
+                            user_data[key] = datetime.fromisoformat(value)
+                
+                users.append(user_data)
+            
+            return users
+            
         except Exception as e:
             print(f"❌ Error getting all users: {e}")
             return []
@@ -330,24 +398,29 @@ class FirebaseManager:
     async def get_admin_stats(self) -> Dict[str, Any]:
         """Get statistics for admin dashboard"""
         try:
-            if not self.is_ready(): return {}
+            if not self.is_ready():
+                return {}
             
-            all_users = await self.get_all_users()
-            pending_payments = await self.get_pending_payments()
+            users_data = await self.get_all_users()
+            payments_data = await self.get_pending_payments()
             
             stats = {
-                'total_users': len(all_users),
-                'active_subscribers': len([u for u in all_users if u.get('subscription_status') == 'active']),
-                'pending_payments': len(pending_payments),
-                'active_bots': len([u for u in all_users if u.get('bot_status') == 'running']),
-                'total_revenue': len([u for u in all_users if u.get('subscription_status') == 'active']) * settings.SUBSCRIPTION_PRICE_USDT
+                'total_users': len(users_data),
+                'trial_users': len([u for u in users_data if u.get('subscription_status') == 'trial']),
+                'active_subscribers': len([u for u in users_data if u.get('subscription_status') == 'active']),
+                'expired_users': len([u for u in users_data if u.get('subscription_status') == 'expired']),
+                'pending_payments': len(payments_data),
+                'active_bots': len([u for u in users_data if u.get('bot_status') == 'running']),
+                'total_revenue': len([u for u in users_data if u.get('subscription_status') == 'active']) * settings.SUBSCRIPTION_PRICE_USDT
             }
+            
             return stats
+            
         except Exception as e:
             print(f"❌ Error getting admin stats: {e}")
             return {}
     
-    # --- IP Whitelist Management (Mevcut kodunuzu koruyoruz) ---
+    # --- IP Whitelist Management ---
     async def create_ip_whitelist_entry(self, entry: 'IPWhitelistEntry') -> bool:
         """Create IP whitelist entry"""
         try:
@@ -380,6 +453,7 @@ class FirebaseManager:
             
             entries = []
             for ip_key, entry_data in whitelist_data.items():
+                # Convert datetime strings back to datetime objects
                 for key, value in entry_data.items():
                     if key.endswith('_at'):
                         if value:
