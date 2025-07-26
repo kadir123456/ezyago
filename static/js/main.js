@@ -97,7 +97,7 @@ class EzyagoApp {
                 if (this.currentPage === 'overview') {
                     this.loadDashboardData();
                 }
-            }, 10000); // Refresh every 10 seconds
+            }, 150000); // Refresh every 10 seconds
         }
     }
 
