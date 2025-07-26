@@ -57,6 +57,8 @@ class MultiBinanceClient:
             return f"{price:.{price_precision}f}"
         
         try:
+            print(f"🔄 Creating market order: {symbol} {side} {quantity}")
+            
             # Create main market order
             main_order = await self.client.futures_create_order(
                 symbol=symbol,
@@ -92,13 +94,21 @@ class MultiBinanceClient:
             return main_order
             
         except BinanceAPIException as e:
-            print(f"❌ Error creating order with SL: {e}")
+            print(f"❌ Binance API Error creating order: {e}")
+            error_msg = str(e)
+            if "Invalid API-key" in error_msg:
+                raise Exception("Geçersiz API anahtarı. Lütfen API anahtarlarınızı kontrol edin.")
+            elif "Signature for this request" in error_msg:
+                raise Exception("API imza hatası. API Secret'ınızı kontrol edin.")
+            elif "Insufficient balance" in error_msg:
+                raise Exception("Yetersiz bakiye. Hesabınızda yeterli USDT bulunmuyor.")
+            else:
+                raise Exception(f"Binance API hatası: {error_msg}")
             # Cancel any open orders if something went wrong
             try:
                 await self.client.futures_cancel_all_open_orders(symbol=symbol)
             except:
                 pass
-            return None
     
     async def close_position(self, symbol: str, position_amt: float, side_to_close: str):
         """Close position"""
