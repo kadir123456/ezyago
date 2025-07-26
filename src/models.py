@@ -61,8 +61,10 @@ class BotSettings(BaseModel):
     take_profit_percent: float = 8.0
     timeframe: str = "15m"
 
+# GÜNCELLENEN BÖLÜM BURASI
 class PaymentNotification(BaseModel):
-    user_email: str
+    # Kullanıcıdan gelen istekte sadece mesaj alanı olabilir, bu da zorunlu değil.
+    # Diğer tüm bilgiler (user_id, email) sunucuda kullanıcının oturumundan (token) alınmalıdır.
     message: Optional[str] = None
 
 # --- Response Models ---
@@ -160,8 +162,8 @@ class UserData(BaseModel):
     # Bot Settings
     bot_order_size_usdt: float = 25.0
     bot_leverage: int = 10
-    bot_stop_loss_percent: float = 4.0
-    bot_take_profit_percent: float = 8.0
+    stop_loss_percent: float = 4.0
+    take_profit_percent: float = 8.0
     bot_timeframe: str = "15m"
     
     # Statistics

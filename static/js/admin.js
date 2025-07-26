@@ -52,7 +52,7 @@ class EzyagoAdmin {
                 if (this.currentPage === 'dashboard') {
                     this.loadDashboardStats();
                 }
-            }, 30000); // Refresh every 30 seconds
+            }, 120000); // Refresh every 2 minutes
         }
     }
 
@@ -506,23 +506,38 @@ class EzyagoAdmin {
                 'Content-Type': 'application/json',
             }
         };
-
+    
         if (this.token) {
             options.headers['Authorization'] = `Bearer ${this.token}`;
         }
-
+    
         if (data) {
             options.body = JSON.stringify(data);
         }
-
-        const response = await fetch(`${this.apiUrl}${endpoint}`, options);
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(result.detail || result.message || 'API request failed');
+    
+        try {
+            const response = await fetch(`${this.apiUrl}${endpoint}`, options);
+            
+            const responseText = await response.text();
+            let result;
+    
+            try {
+                result = JSON.parse(responseText);
+            } catch (e) {
+                result = { detail: responseText };
+            }
+    
+            if (!response.ok) {
+                const errorMessage = result.detail || result.message || 'API isteği başarısız oldu';
+                throw new Error(errorMessage);
+            }
+    
+            return result;
+    
+        } catch (error) {
+            console.error(`API Call Error (${endpoint}):`, error);
+            throw error;
         }
-
-        return result;
     }
 
     getSubscriptionStatusText(status) {
@@ -561,6 +576,8 @@ class EzyagoAdmin {
         this.loadDashboardStats();
         this.showNotification('Veriler yenilendi', 'success');
     }
+
+
 
     refreshUsers() {
         this.loadUsers();

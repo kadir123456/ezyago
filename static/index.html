@@ -383,7 +383,6 @@
 
     <!-- Dashboard -->
     <div id="dashboard" class="dashboard" style="display: none;">
-        <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="brand">
@@ -416,34 +415,17 @@
             </nav>
             
             <div class="sidebar-footer">
-                <button class="btn btn-outline btn-full" onclick="logout()">
-                    <i class="fas fa-sign-out-alt"></i>
-                    Çıkış Yap
-                </button>
+                
             </div>
         </aside>
 
-        <!-- Main Content -->
         <main class="dashboard-main">
-            <!-- Header -->
             <header class="dashboard-header">
                 <h1 id="page-title">Genel Bakış</h1>
-                <div class="user-info">
-                    <div class="user-avatar">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <div class="user-details">
-                        <span class="user-name" id="user-name">Kullanıcı</span>
-                        <span class="user-email" id="user-email">user@example.com</span>
-                    </div>
-                </div>
             </header>
 
-            <!-- Content -->
             <div class="dashboard-content">
-                <!-- Overview Page -->
                 <div id="overview-page" class="page active">
-                    <!-- Stats Cards -->
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-icon">
@@ -489,9 +471,7 @@
                         </div>
                     </div>
 
-                    <!-- Cards Grid -->
                     <div class="cards-grid">
-                        <!-- Bot Info Card -->
                         <div class="card">
                             <div class="card-header">
                                 <h3>Bot Bilgileri</h3>
@@ -522,7 +502,6 @@
                             </div>
                         </div>
 
-                        <!-- Trading Stats Card -->
                         <div class="card">
                             <div class="card-header">
                                 <h3>İşlem İstatistikleri</h3>
@@ -555,7 +534,6 @@
                     </div>
                 </div>
 
-                <!-- Bot Control Page -->
                 <div id="bot-page" class="page">
                     <div class="bot-control">
                         <div class="card">
@@ -584,7 +562,6 @@
                             </div>
                         </div>
 
-                        <!-- Bot Settings -->
                         <div class="bot-settings">
                             <h4>Bot Ayarları</h4>
                             <div class="settings-form">
@@ -636,7 +613,6 @@
                     </div>
                 </div>
 
-                <!-- API Keys Page -->
                 <div id="api-keys-page" class="page">
                     <div class="card">
                         <div class="card-header">
@@ -681,6 +657,10 @@
                                     <li>API Management sayfasına gidin</li>
                                     <li>Yeni API anahtarı oluşturun</li>
                                     <li>Sadece "Enable Futures" seçeneğini işaretleyin</li>
+                                    <li>Bu Ip adreslerini Binance hesabınıza tek tek ekleyin</li>
+                                    <li>18.156.158.53</li>
+                                    <li>18.156.42.200</li>
+                                    <li>52.59.103.54</li>
                                     <li>API Key ve Secret'ı buraya yapıştırın</li>
                                 </ol>
                                 
@@ -700,10 +680,8 @@
                     </div>
                 </div>
 
-                <!-- Subscription Page -->
                 <div id="subscription-page" class="page">
                     <div class="cards-grid">
-                        <!-- Subscription Status -->
                         <div class="card">
                             <div class="card-header">
                                 <h3>Abonelik Durumu</h3>
@@ -729,7 +707,6 @@
                             </div>
                         </div>
 
-                        <!-- Payment Info -->
                         <div class="card">
                             <div class="card-header">
                                 <h3>Ödeme Bilgileri</h3>
@@ -744,7 +721,7 @@
                                     
                                     <div class="payment-details">
                                         <div class="form-group">
-                                            <label for="wallet-address">USDT Cüzdan Adresi:</label>
+                                            <label for="wallet-address">TRC20 USDT Cüzdan Adresi:</label>
                                             <div class="wallet-address">
                                                 <input type="text" id="wallet-address" class="form-input" readonly>
                                                 <button class="btn btn-outline" onclick="copyWalletAddress()">
@@ -758,13 +735,21 @@
                                     <div class="payment-actions">
                                         <button class="btn btn-primary btn-full" onclick="requestPayment()">
                                             <i class="fas fa-credit-card"></i>
-                                            Ödeme Yaptım, Bildirimi Gönder
+                                            Ödeme Yaptım
                                         </button>
                                     </div>
                                     
                                     <div class="payment-note">
                                         <i class="fas fa-info-circle"></i>
-                                        <span>10 USDT gönderdikten sonra "Ödeme Yaptım" butonuna tıklayın. 24 saat içinde aboneliğiniz aktif edilecektir.</span>
+                                        <span>Ödeme işlemini tamamladıktan sonra;
+
+E-posta adresimize "EZYAGO ÖDEME" yazınız,
+
+Ödeme yaptığınıza dair ekran görüntüsünü ve
+
+Kayıtlı e-posta adresinizi mutlaka ekleyerek gönderiniz.
+
+Gönderdiğiniz bilgiler kontrol edildikten sonra, 24 saat içinde aboneliğiniz aktif edilecektir.</span>
                                     </div>
                                 </div>
                             </div>
@@ -772,12 +757,21 @@
                     </div>
                 </div>
 
-                <!-- Settings Page -->
                 <div id="settings-page" class="page">
                     <div class="settings-container">
-                        <!-- Profile Settings -->
                         <div class="settings-card">
                             <h3>Profil Ayarları</h3>
+
+                            <div class="user-info" style="margin-bottom: 2rem; padding: 1rem; background-color: var(--bg-secondary); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;">
+                                <div class="user-avatar" style="margin-right: 1rem;">
+                                    <i class="fas fa-user"></i>
+                                </div>
+                                <div class="user-details">
+                                    <span class="user-name" id="user-name">Kullanıcı</span>
+                                    <span class="user-email" id="user-email">user@example.com</span>
+                                </div>
+                            </div>
+
                             <div class="settings-form">
                                 <div class="form-group">
                                     <label for="full-name">Ad Soyad:</label>
@@ -804,13 +798,17 @@
                             </div>
                         </div>
 
-                        <!-- Danger Zone -->
                         <div class="danger-zone">
                             <h4>Tehlikeli Bölge</h4>
                             <p>Bu işlemler geri alınamaz. Dikkatli olun.</p>
                             <button class="btn btn-danger" onclick="deleteAccount()">
                                 <i class="fas fa-trash"></i>
                                 Hesabı Sil
+                            </button>
+
+                            <button class="btn btn-outline" onclick="logout()" style="border-color: var(--danger-color); color: var(--danger-color); margin-top: 1rem; width: 100%;">
+                                <i class="fas fa-sign-out-alt"></i>
+                                Çıkış Yap
                             </button>
                         </div>
                     </div>
