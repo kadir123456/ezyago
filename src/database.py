@@ -3,7 +3,7 @@ from firebase_admin import credentials, db, auth
 import json
 import os
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone # timezone ekliyoruz
 from .config import settings
 from .models import UserData, TradeData, PaymentRequest, SubscriptionStatus, BotStatus
 import uuid
@@ -53,8 +53,8 @@ class FirebaseManager:
                 print(f"✅ Creating admin user: {user_data.email}")
             
             # Set trial end date
-            user_data.trial_end_date = datetime.utcnow() + timedelta(days=settings.TRIAL_DAYS)
-            user_data.created_at = datetime.utcnow()
+            user_data.trial_end_date = datetime.now(timezone.utc) + timedelta(days=settings.TRIAL_DAYS)
+            user_data.created_at = datetime.now(timezone.utc)
             
             # Convert to dict and handle datetime serialization
             user_dict = user_data.dict()
@@ -70,8 +70,9 @@ class FirebaseManager:
             print(f"❌ Error creating user: {e}")
             return False
     
+    # --- GÜNCELLENEN FONKSİYON ---
     async def get_user(self, uid: str) -> Optional[UserData]:
-        """Get user data by UID"""
+        """Get user data by UID and ensure bot settings have default values."""
         try:
             if not self.is_ready():
                 return None
@@ -81,7 +82,22 @@ class FirebaseManager:
             
             if not user_data:
                 return None
-            
+                
+            # --- YENİ EKLENEN KONTROL ---
+            # Eğer bot ayarları veritabanında eksikse, varsayılan değerleri ata.
+            # Bu, eski kullanıcıların sorun yaşamasını engeller.
+            if 'bot_order_size_usdt' not in user_data:
+                user_data['bot_order_size_usdt'] = 25.0
+            if 'bot_leverage' not in user_data:
+                user_data['bot_leverage'] = 10
+            if 'bot_stop_loss_percent' not in user_data:
+                user_data['bot_stop_loss_percent'] = 4.0
+            if 'bot_take_profit_percent' not in user_data:
+                user_data['bot_take_profit_percent'] = 8.0
+            if 'bot_timeframe' not in user_data:
+                user_data['bot_timeframe'] = "15m"
+            # --------------------------------
+
             # Convert datetime strings back to datetime objects
             for key, value in user_data.items():
                 if key.endswith('_date') or key.endswith('_at') or key.endswith('_expires'):
@@ -89,8 +105,8 @@ class FirebaseManager:
                         try:
                             user_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
                         except ValueError:
-                             user_data[key] = datetime.fromisoformat(value)
-
+                            user_data[key] = datetime.fromisoformat(value)
+            
             return UserData(**user_data)
             
         except Exception as e:
@@ -111,7 +127,8 @@ class FirebaseManager:
             
             # Get the first (and should be only) user
             uid = list(users_data.keys())[0]
-            return await self.get_user(uid) # Re-use get_user to handle date parsing
+            # get_user fonksiyonunu yeniden kullanarak tarih dönüşümlerini ve varsayılanları garantile
+            return await self.get_user(uid)
             
         except Exception as e:
             print(f"❌ Error getting user by email: {e}")
@@ -162,51 +179,24 @@ class FirebaseManager:
             print(f"❌ Error deleting user: {e}")
             return False
     
-    # --- Subscription Management ---
-    # Bu fonksiyon approve_payment içinde kullanıldığı için burada kalması doğru
-    async def extend_subscription(self, uid: str, days: int) -> bool:
-        # ... (Bu fonksiyonun içeriği doğru, olduğu gibi bırakıyoruz) ...
-        pass
-    
-    async def check_expired_subscriptions(self) -> List[str]:
-        # ... (Bu fonksiyonun içeriği doğru, olduğu gibi bırakıyoruz) ...
-        pass
-
-    # --- Trading Data ---
-    async def log_trade(self, trade_data: TradeData) -> bool:
-        # ... (Bu fonksiyonun içeriği doğru, olduğu gibi bırakıyoruz) ...
-        pass
-    
-    async def _update_user_stats(self, uid: str, trade_data: TradeData):
-        # ... (Bu fonksiyonun içeriği doğru, olduğu gibi bırakıyoruz) ...
-        pass
-    
     # --- Payment Management ---
-    # --- GÜNCELLENEN BÖLÜM ---
     async def create_payment_request(self, payment_data: Dict[str, Any]) -> bool:
         """Create a payment request using a dictionary."""
         try:
             if not self.is_ready():
                 return False
-            
-            # main.py'den artık dictionary geldiği için doğrudan set ediyoruz
             self.db_ref.child('payments').child(payment_data['payment_id']).set(payment_data)
             return True
-            
         except Exception as e:
             print(f"❌ Error creating payment request: {e}")
             return False
 
-    # --- YENİ EKLENEN FONKSİYONLAR ---
     async def get_payment(self, payment_id: str) -> Optional[Dict[str, Any]]:
         """Get a single payment by its ID."""
         try:
             if not self.is_ready():
                 return None
-            
-            payment_data = self.db_ref.child('payments').child(payment_id).get()
-            return payment_data
-            
+            return self.db_ref.child('payments').child(payment_id).get()
         except Exception as e:
             print(f"❌ Error getting payment {payment_id}: {e}")
             return None
@@ -216,10 +206,8 @@ class FirebaseManager:
         try:
             if not self.is_ready():
                 return False
-            
             self.db_ref.child('payments').child(payment_id).update(updates)
             return True
-            
         except Exception as e:
             print(f"❌ Error updating payment {payment_id}: {e}")
             return False
