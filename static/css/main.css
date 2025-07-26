@@ -1795,6 +1795,7 @@ html, body {
         flex-shrink: 0;
     }
     
+    /* Mobil dashboard navigasyonunu ikon-only yapar */
     .sidebar-nav {
         display: flex;
         overflow-x: initial;
@@ -1820,21 +1821,8 @@ html, body {
         border-bottom-color: var(--primary-color);
     }
     
-    /* BAŞLIK KISMI İÇİN DÜZELTME BURADA */
+    /* Başlık bölümünü tamamen gizleyerek boşluğu kaldırır */
     .dashboard-header {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-        gap: var(--spacing-sm);
-    }
-
-    .dashboard-header h1 {
-        font-size: var(--font-size-lg);
-        margin: 0;
-    }
-
-    /* KULLANICI BİLGİSİ ARTIK AYARLARDA OLDUĞU İÇİN BU KODA İHTİYAÇ YOK AMA ZARARI DA YOKTUR */
-    .user-details .user-email {
         display: none;
     }
     
