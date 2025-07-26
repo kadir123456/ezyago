@@ -30,6 +30,33 @@ class EzyagoApp {
     }
 
     setupEventListeners() {
+        // Mobile menu toggle
+        const navToggle = document.querySelector('.nav-toggle');
+        const navMenu = document.querySelector('.nav-menu');
+        
+        if (navToggle && navMenu) {
+            navToggle.addEventListener('click', () => {
+                navMenu.classList.toggle('active');
+                navToggle.classList.toggle('active');
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!navToggle.contains(e.target) && !navMenu.contains(e.target)) {
+                    navMenu.classList.remove('active');
+                    navToggle.classList.remove('active');
+                }
+            });
+            
+            // Close menu when clicking on a link
+            navMenu.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', () => {
+                    navMenu.classList.remove('active');
+                    navToggle.classList.remove('active');
+                });
+            });
+        }
+
         // Navigation
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
@@ -70,7 +97,7 @@ class EzyagoApp {
                 if (this.currentPage === 'overview') {
                     this.loadDashboardData();
                 }
-            }, 120000); // Refresh every 10 seconds
+            }, 10000); // Refresh every 10 seconds
         }
     }
 
@@ -139,11 +166,18 @@ class EzyagoApp {
     async handleLogin() {
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
+        const submitBtn = document.querySelector('#login-form button[type="submit"]');
 
         // Client-side validation
         if (!email || !password) {
             this.showNotification('E-posta ve şifre gereklidir.', 'error');
             return;
+        }
+        
+        // Disable submit button
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Giriş yapılıyor...';
         }
         
         console.log('🔄 Attempting login for:', email);
@@ -183,6 +217,12 @@ class EzyagoApp {
             }
             
             this.showNotification(errorMessage, 'error');
+        } finally { // HATA BURADAYDI - FAZLADAN BİR '}' SİLİNDİ
+            // Re-enable submit button
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Giriş Yap';
+            }
         }
     }
 
@@ -190,6 +230,7 @@ class EzyagoApp {
         const fullName = document.getElementById('register-name').value;
         const email = document.getElementById('register-email').value;
         const password = document.getElementById('register-password').value;
+        const submitBtn = document.querySelector('#register-form button[type="submit"]');
 
         // Client-side validation
         if (!fullName || !email || !password) {
@@ -205,6 +246,12 @@ class EzyagoApp {
         if (!email.includes('@')) {
             this.showNotification('Geçerli bir e-posta adresi girin.', 'error');
             return;
+        }
+        
+        // Disable submit button
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Kayıt oluşturuluyor...';
         }
         
         console.log('🔄 Starting registration process...');
@@ -244,6 +291,12 @@ class EzyagoApp {
             }
             
             this.showNotification(errorMessage, 'error');
+        } finally {
+            // Re-enable submit button
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-user-plus"></i> Hesap Oluştur';
+            }
         }
     }
 
@@ -375,12 +428,18 @@ class EzyagoApp {
     updateUserInfo() {
         if (!this.user) return;
         
-        document.getElementById('user-name').textContent = this.user.full_name;
-        document.getElementById('user-email').textContent = this.user.email;
+        const userNameEl = document.getElementById('user-name');
+        const userEmailEl = document.getElementById('user-email');
+        
+        if (userNameEl) userNameEl.textContent = this.user.full_name;
+        if (userEmailEl) userEmailEl.textContent = this.user.email;
         
         // Update subscription info
-        document.getElementById('subscription-status').textContent = 
-            this.user.subscription_status === 'trial' ? 'Deneme Süresi' : 'Premium';
+        const subscriptionStatusEl = document.getElementById('subscription-status');
+        if (subscriptionStatusEl) {
+            subscriptionStatusEl.textContent = 
+                this.user.subscription_status === 'trial' ? 'Deneme Süresi' : 'Premium';
+        }
         
         const endDate = this.user.subscription_status === 'trial' 
             ? this.user.trial_end_date 
@@ -388,8 +447,11 @@ class EzyagoApp {
             
         if (endDate) {
             const remaining = this.calculateRemainingTime(endDate);
-            document.getElementById('remaining-time').textContent = remaining;
-            document.getElementById('end-date').textContent = new Date(endDate).toLocaleDateString('tr-TR');
+            const remainingTimeEl = document.getElementById('remaining-time');
+            const endDateEl = document.getElementById('end-date');
+            
+            if (remainingTimeEl) remainingTimeEl.textContent = remaining;
+            if (endDateEl) endDateEl.textContent = new Date(endDate).toLocaleDateString('tr-TR');
         }
     }
 
@@ -449,7 +511,10 @@ class EzyagoApp {
 
         try {
             console.log(`🔄 Starting bot for symbol: ${symbol}`);
-            const response = await this.apiCall('/api/bot/start', 'POST', { symbol });
+            const response = await this.apiCall('/api/bot/start', 'POST', { 
+                action: 'start',
+                symbol: symbol 
+            });
             
             // Extract message from response
             let message = 'Bot başlatıldı!';
@@ -476,18 +541,12 @@ class EzyagoApp {
             let errorMessage = 'Bot başlatılırken hata oluştu.';
             
             // Extract error message properly
-            if (error && typeof error === 'object') {
-                if (error.message) {
-                    errorMessage = error.message;
-                } else if (error.detail) {
-                    errorMessage = error.detail;
-                } else if (error.error) {
-                    errorMessage = error.error;
-                } else {
-                    errorMessage = JSON.stringify(error);
-                }
-            } else if (typeof error === 'string') {
+            if (typeof error === 'string') {
                 errorMessage = error;
+            } else if (error && error.message) {
+                errorMessage = error.message;
+            } else if (error) {
+                errorMessage = String(error);
             }
             
             console.error(`❌ Bot start failed: ${errorMessage}`);
@@ -683,16 +742,27 @@ class EzyagoApp {
         } else if (page === 'settings') {
             this.loadSettingsData();
         } else if (page === 'api-keys') {
-            this.loadIPWhitelist();
+            // API keys page doesn't need special loading
+            console.log('API Keys page loaded');
         }
     }
 
     async loadSettingsData() {
         if (!this.user) return;
         
-        document.getElementById('full-name').value = this.user.full_name || '';
-        document.getElementById('email').value = this.user.email || '';
-        document.getElementById('language').value = this.user.language || 'tr';
+        const fullNameEl = document.getElementById('full-name');
+        const emailEl = document.getElementById('email');
+        const languageEl = document.getElementById('language');
+        
+        if (fullNameEl) fullNameEl.value = this.user.full_name || '';
+        if (emailEl) emailEl.value = this.user.email || '';
+        if (languageEl) languageEl.value = this.user.language || 'tr';
+    }
+    
+    // Add missing loadIPWhitelist function
+    async loadIPWhitelist() {
+        console.log('Loading IP whitelist...');
+        // This function can be implemented later if needed
     }
 
     // UI Methods
@@ -775,7 +845,7 @@ class EzyagoApp {
             
             if (contentType && contentType.includes('application/json')) {
                 result = await response.json();
-                console.log('📦 JSON Response:', result);
+                console.log('📦 JSON Response:', JSON.stringify(result, null, 2));
             } else {
                 const text = await response.text();
                 console.log('📄 Text Response:', text);
@@ -786,18 +856,23 @@ class EzyagoApp {
                 let errorMessage = `HTTP ${response.status}`;
                 
                 if (result) {
-                    if (result.detail) {
+                    if (typeof result === 'string') {
+                        errorMessage = result;
+                    } else if (Array.isArray(result.detail)) {
+                        // FastAPI validation errors
+                        errorMessage = result.detail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+                    } else if (result.detail) {
                         errorMessage = result.detail;
                     } else if (result.message) {
                         errorMessage = result.message;
                     } else if (result.error) {
                         errorMessage = result.error;
-                    } else if (typeof result === 'string') {
-                        errorMessage = result;
+                    } else if (typeof result === 'object') {
+                        errorMessage = JSON.stringify(result);
                     }
                 }
                 
-                console.error('❌ API Error:', errorMessage);
+                console.error('❌ API Error:', errorMessage, 'Full response:', result);
                 throw new Error(errorMessage);
             }
 
