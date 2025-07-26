@@ -1,5 +1,3 @@
-# GÜNCELLENMİŞ VE TAM database.py DOSYASI
-
 import firebase_admin
 from firebase_admin import credentials, db, auth
 import json
@@ -16,7 +14,7 @@ class FirebaseManager:
         self._initialize_firebase()
     
     def _initialize_firebase(self):
-        """Initialize Firebase Admin SDK"""
+        """Firebase Admin SDK'sını başlatır."""
         try:
             if not firebase_admin._apps:
                 if settings.FIREBASE_CREDENTIALS_JSON and settings.FIREBASE_DATABASE_URL:
@@ -39,9 +37,9 @@ class FirebaseManager:
     def is_ready(self) -> bool:
         return self.initialized and self.db_ref is not None
     
-    # --- User Management ---
+    # --- Kullanıcı Yönetimi ---
     async def create_user(self, user_data: dict) -> bool:
-        """Create a new user in the database from a dictionary."""
+        """Veritabanında sözlük verisiyle yeni bir kullanıcı oluşturur."""
         try:
             if not self.is_ready(): return False
             self.db_ref.child('users').child(user_data['uid']).set(user_data)
@@ -52,82 +50,64 @@ class FirebaseManager:
             return False
 
     async def get_user(self, uid: str) -> Optional[UserData]:
-        """Get user data by UID and ensure bot settings have default values."""
+        """Kullanıcı verisini UID ile alır ve eksik bot ayarları için varsayılan değerleri atar."""
         try:
-            if not self.is_ready():
-                return None
+            if not self.is_ready(): return None
             
-            user_ref = self.db_ref.child('users').child(uid)
-            user_data = user_ref.get()
-            
-            if not user_data:
-                return None
+            user_data = self.db_ref.child('users').child(uid).get()
+            if not user_data: return None
                 
             # --- ÖNEMLİ GÜNCELLEME: EKSİK BOT AYARLARINI EKLEME ---
-            if 'bot_order_size_usdt' not in user_data:
-                user_data['bot_order_size_usdt'] = 25.0
-            if 'bot_leverage' not in user_data:
-                user_data['bot_leverage'] = 10
-            if 'bot_stop_loss_percent' not in user_data:
-                user_data['bot_stop_loss_percent'] = 4.0
-            if 'bot_take_profit_percent' not in user_data:
-                user_data['bot_take_profit_percent'] = 8.0
-            if 'bot_timeframe' not in user_data:
-                user_data['bot_timeframe'] = "15m"
+            default_settings = {
+                'bot_order_size_usdt': 25.0, 'bot_leverage': 10,
+                'bot_stop_loss_percent': 4.0, 'bot_take_profit_percent': 8.0,
+                'bot_timeframe': "15m"
+            }
+            for key, value in default_settings.items():
+                if key not in user_data:
+                    user_data[key] = value
             # ----------------------------------------------------
 
+            # Tarih formatlarını datetime nesnesine çevir
             for key, value in user_data.items():
-                if key.endswith('_date') or key.endswith('_at') or key.endswith('_expires'):
-                    if value and isinstance(value, str):
-                        try:
-                            user_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
-                        except ValueError:
-                            user_data[key] = datetime.fromisoformat(value)
+                if key.endswith(('_date', '_at', '_expires')) and value and isinstance(value, str):
+                    try:
+                        user_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                    except ValueError:
+                        user_data[key] = datetime.fromisoformat(value)
             
             return UserData(**user_data)
-            
         except Exception as e:
             print(f"❌ Error getting user {uid}: {e}")
             return None
     
     async def get_user_by_email(self, email: str) -> Optional[UserData]:
-        """Get user data by email"""
+        """Kullanıcı verisini e-posta ile alır."""
         try:
-            if not self.is_ready():
-                return None
-            
-            users_ref = self.db_ref.child('users')
-            users_data = users_ref.order_by_child('email').equal_to(email).get()
-            
-            if not users_data:
-                return None
-            
+            if not self.is_ready(): return None
+            users_data = self.db_ref.child('users').order_by_child('email').equal_to(email).get()
+            if not users_data: return None
             uid = list(users_data.keys())[0]
             return await self.get_user(uid)
-            
         except Exception as e:
             print(f"❌ Error getting user by email {email}: {e}")
             return None
     
     async def update_user(self, uid: str, updates: Dict[str, Any]) -> bool:
-        """Update user data"""
+        """Kullanıcı verisini günceller."""
         try:
-            if not self.is_ready():
-                return False
-            
+            if not self.is_ready(): return False
             for key, value in updates.items():
                 if isinstance(value, datetime):
                     updates[key] = value.isoformat()
-            
             self.db_ref.child('users').child(uid).update(updates)
             return True
-            
         except Exception as e:
             print(f"❌ Error updating user {uid}: {e}")
             return False
     
     async def delete_user(self, uid: str) -> bool:
-        """Delete user and all associated data"""
+        """Kullanıcının kimlik doğrulama kaydını ve tüm veritabanı verilerini siler."""
         try:
             if not self.is_ready(): return False
             auth.delete_user(uid)
@@ -143,9 +123,9 @@ class FirebaseManager:
             print(f"❌ Error deleting user {uid}: {e}")
             return False
 
-    # --- Payment Management ---
+    # --- Ödeme Yönetimi ---
     async def create_payment_request(self, payment_data: Dict[str, Any]) -> bool:
-        """Create a payment request using a dictionary."""
+        """Sözlük verisiyle bir ödeme talebi oluşturur."""
         try:
             if not self.is_ready(): return False
             self.db_ref.child('payments').child(payment_data['payment_id']).set(payment_data)
@@ -155,7 +135,7 @@ class FirebaseManager:
             return False
 
     async def get_payment(self, payment_id: str) -> Optional[Dict[str, Any]]:
-        """Get a single payment by its ID."""
+        """Tek bir ödemeyi ID'si ile alır."""
         try:
             if not self.is_ready(): return None
             return self.db_ref.child('payments').child(payment_id).get()
@@ -164,7 +144,7 @@ class FirebaseManager:
             return None
 
     async def update_payment(self, payment_id: str, updates: Dict[str, Any]) -> bool:
-        """Update a payment record."""
+        """Bir ödeme kaydını günceller."""
         try:
             if not self.is_ready(): return False
             self.db_ref.child('payments').child(payment_id).update(updates)
@@ -173,18 +153,36 @@ class FirebaseManager:
             print(f"❌ Error updating payment {payment_id}: {e}")
             return False
             
-    # --- Admin Functions ---
+    # --- Admin Fonksiyonları ---
+    async def get_all_users(self) -> List[Dict[str, Any]]:
+        """Admin paneli için tüm kullanıcıları alır."""
+        try:
+            if not self.is_ready(): return []
+            users_data = self.db_ref.child('users').get()
+            return list(users_data.values()) if users_data else []
+        except Exception as e:
+            print(f"❌ Error getting all users: {e}")
+            return []
+
+    async def get_pending_payments(self) -> List[Dict[str, Any]]:
+        """Onay bekleyen tüm ödeme taleplerini alır."""
+        try:
+            if not self.is_ready(): return []
+            payments_ref = self.db_ref.child('payments')
+            payments_data = payments_ref.order_by_child('status').equal_to('pending').get()
+            return list(payments_data.values()) if payments_data else []
+        except Exception as e:
+            print(f"❌ Error getting pending payments: {e}")
+            return []
+            
     async def get_admin_stats(self) -> dict:
-        """Get statistics for admin dashboard."""
+        """Admin paneli için istatistikleri alır."""
         try:
             if not self.is_ready(): return {}
             
-            all_users_raw = self.db_ref.child('users').get() or {}
-            all_users = list(all_users_raw.values())
+            all_users = await self.get_all_users()
+            pending_payments = await self.get_pending_payments()
             
-            pending_payments_raw = self.db_ref.child('payments').order_by_child('status').equal_to('pending').get() or {}
-            pending_payments = list(pending_payments_raw.values())
-
             stats = {
                 'total_users': len(all_users),
                 'active_subscribers': len([u for u in all_users if u.get('subscription_status') == 'active']),
