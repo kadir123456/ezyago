@@ -97,7 +97,7 @@ class EzyagoApp {
                 if (this.currentPage === 'overview') {
                     this.loadDashboardData();
                 }
-            }, 150000); // Refresh every 10 seconds
+            }, 10000); // Refresh every 10 seconds
         }
     }
 
@@ -220,14 +220,14 @@ class EzyagoApp {
             }
             
             this.showNotification(errorMessage, 'error');
-        } finally { // HATA BURADAYDI - FAZLADAN BİR '}' SİLİNDİ
+        }
+    }
+        } finally {
             // Re-enable submit button
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Giriş Yap';
             }
-        }
-    }
 
     async handleRegister() {
         const fullName = document.getElementById('register-name').value;
