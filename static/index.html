@@ -60,7 +60,7 @@
                     </button>
                 </div>
                 
-                <button class="nav-toggle">
+                <button class="nav-toggle" onclick="toggleMobileMenu()">
                     <span></span>
                     <span></span>
                     <span></span>
@@ -415,7 +415,10 @@
             </nav>
             
             <div class="sidebar-footer">
-                
+                <button class="btn btn-outline logout-btn" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Çıkış Yap</span>
+                </button>
             </div>
         </aside>
 
@@ -804,11 +807,6 @@ Gönderdiğiniz bilgiler kontrol edildikten sonra, 24 saat içinde aboneliğiniz
                             <button class="btn btn-danger" onclick="deleteAccount()">
                                 <i class="fas fa-trash"></i>
                                 Hesabı Sil
-                            </button>
-
-                            <button class="btn btn-outline" onclick="logout()" style="border-color: var(--danger-color); color: var(--danger-color); margin-top: 1rem; width: 100%;">
-                                <i class="fas fa-sign-out-alt"></i>
-                                Çıkış Yap
                             </button>
                         </div>
                     </div>
