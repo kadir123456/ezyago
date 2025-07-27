@@ -710,16 +710,6 @@ async def approve_payment(payment_id: str, current_admin: UserData = Depends(get
     """Approve a payment"""
     try:
         # Get payment details
-        payment = await firebase_manager.get_payment(payment_id)
-        if not payment:
-            raise HTTPException(status_code=404, detail="Ödeme bulunamadı")
-        
-        # Update payment status
-        await firebase_manager.update_payment(payment_id, {
-            "status": "approved",
-            "processed_by": current_admin.uid,
-            "processed_at": datetime.utcnow()
-        })
 # Account deletion
 @app.delete("/api/user/account")
 async def delete_account(current_user: UserData = Depends(get_current_user)):
