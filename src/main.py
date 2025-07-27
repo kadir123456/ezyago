@@ -598,16 +598,47 @@ async def approve_payment(payment_id: str, current_admin: UserData = Depends(get
             "processed_by": current_admin.uid,
             "processed_at": datetime.utcnow()
         })
-@app.get("/api/admin/users")
-async def get_all_users(current_admin: UserData = Depends(get_current_admin)):
-    """Get all users for admin"""
+        
+        # --- DÜZELTME BAŞLANGICI ---
+        
+        # Update user's subscription
+        user_id = payment.get("user_id")
+        if user_id:
+            user = await firebase_manager.get_user(user_id)
+            if user:
+                # If user has an active subscription, add 30 days. Otherwise, start from now.
+                current_sub_end = user.subscription_end_date or datetime.utcnow()
+                new_sub_end_date = current_sub_end + timedelta(days=30)
+                
+                await firebase_manager.update_user(user_id, {
+                    "subscription_status": "active",
+                    "subscription_end_date": new_sub_end_date
+                })
+                print(f"✅ Subscription updated for user: {user_id}")
+
+        print(f"✅ Payment approved for payment_id: {payment_id}")
+        return {"message": "Ödeme başarıyla onaylandı ve kullanıcının aboneliği güncellendi."}
+
+    except Exception as e:
+        print(f"❌ Approve payment error: {e}")
+        raise HTTPException(status_code=500, detail="Ödeme onaylanırken bir hata oluştu")
+    # --- DÜZELTME SONU ---
+
+# Account deletion
+@app.delete("/api/user/account")
+async def delete_account(current_user: UserData = Depends(get_current_user)):
+    """Delete user account"""
     try:
-        users = await firebase_manager.get_all_users()
-        return users
+        print(f"🔄 Account deletion for: {current_user.email}")
+        
+        await firebase_manager.delete_user(current_user.uid)
+        
+        print(f"✅ Account deleted for: {current_user.email}")
+        return {"message": "Hesabınız başarıyla silindi"}
         
     except Exception as e:
-        print(f"❌ Admin users error: {e}")
-        raise HTTPException(status_code=500, detail="Kullanıcılar alınırken hata oluştu")
+        print(f"❌ Account deletion error for {current_user.email}: {e}")
+        raise HTTPException(status_code=500, detail="Hesap silinirken hata oluştu")
 
 @app.post("/api/admin/users/{user_id}/block")
 async def block_user(user_id: str, current_admin: UserData = Depends(get_current_admin)):
