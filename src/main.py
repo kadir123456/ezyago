@@ -710,6 +710,67 @@ async def approve_payment(payment_id: str, current_admin: UserData = Depends(get
     """Approve a payment"""
     try:
         # Get payment details
+        payment = await firebase_manager.get_payment(payment_id)
+        if not payment:
+            raise HTTPException(status_code=404, detail="Ödeme bulunamadı")
+        
+        # Update payment status
+        await firebase_manager.update_payment(payment_id, {
+            "status": "approved",
+            "processed_by": current_admin.uid,
+            "processed_at": datetime.utcnow()
+        })
+@app.get("/api/admin/users")
+async def get_all_users(current_admin: UserData = Depends(get_current_admin)):
+    """Get all users for admin"""
+    try:
+        users = await firebase_manager.get_all_users()
+        return users
+        
+    except Exception as e:
+        print(f"❌ Admin users error: {e}")
+        raise HTTPException(status_code=500, detail="Kullanıcılar alınırken hata oluştu")
+
+@app.post("/api/admin/users/{user_id}/block")
+async def block_user(user_id: str, current_admin: UserData = Depends(get_current_admin)):
+    """Block a user"""
+    try:
+        await firebase_manager.update_user(user_id, {"is_blocked": True})
+        print(f"✅ User blocked by admin: {user_id}")
+        return {"message": "Kullanıcı engellendi"}
+        
+    except Exception as e:
+        print(f"❌ Block user error: {e}")
+        raise HTTPException(status_code=500, detail="Kullanıcı engellenirken hata oluştu")
+
+@app.post("/api/admin/users/{user_id}/unblock")
+async def unblock_user(user_id: str, current_admin: UserData = Depends(get_current_admin)):
+    """Unblock a user"""
+    try:
+        await firebase_manager.update_user(user_id, {"is_blocked": False})
+        print(f"✅ User unblocked by admin: {user_id}")
+        return {"message": "Kullanıcı engeli kaldırıldı"}
+        
+    except Exception as e:
+        print(f"❌ Unblock user error: {e}")
+        raise HTTPException(status_code=500, detail="Engel kaldırılırken hata oluştu")
+
+@app.get("/api/admin/payments/pending")
+async def get_pending_payments(current_admin: UserData = Depends(get_current_admin)):
+    """Get pending payments for admin"""
+    try:
+        payments = await firebase_manager.get_pending_payments()
+        return payments
+        
+    except Exception as e:
+        print(f"❌ Pending payments error: {e}")
+        raise HTTPException(status_code=500, detail="Bekleyen ödemeler alınırken hata oluştu")
+
+@app.post("/api/admin/payments/{payment_id}/approve")
+async def approve_payment(payment_id: str, current_admin: UserData = Depends(get_current_admin)):
+    """Approve a payment"""
+    try:
+        # Get payment details
 # Account deletion
 @app.delete("/api/user/account")
 async def delete_account(current_user: UserData = Depends(get_current_user)):
